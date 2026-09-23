@@ -1,34 +1,44 @@
 import { TelemetryState, SystemSettings, LogEvent, ESP32TelemetryRaw } from "../types/telemetry";
 
 export const DEFAULT_SETTINGS: SystemSettings = {
-  tempWarningThreshold: 28.0,
-  tempCriticalThreshold: 35.0,
-  vibrationWarningThreshold: 3.0,
-  vibrationCriticalThreshold: 5.0,
-  currentWarningThreshold: 2.0,
-  currentCriticalThreshold: 2.6,
+  tempWarningThreshold: 29.0, // 29°C per BLACKSUN hardware logic
+  tempCriticalThreshold: 35.0, // 35°C
+  vibrationWarningThreshold: 3.0, // 3.0 g
+  vibrationCriticalThreshold: 5.0, // 5.0 g
+  currentWarningThreshold: 2.0, // 2.0 A
+  currentCriticalThreshold: 2.6, // 2.6 A
   rfTimeoutMs: 200,
   telemetryRateMs: 500,
 };
 
 export const INITIAL_OFFLINE_TELEMETRY: TelemetryState = {
+  mode: "DEMO",
   isConnected: false,
   wsStatus: "disconnected",
+  wsLatency: null,
+  ip: null,
 
   temperature: null,
   temperatureRate: null,
   voltage: null,
   current: null,
+  currentA: null,
+  current_mA: null,
   power: null,
+  powerW: null,
+  power_mW: null,
   motorCurrent: null,
   vibration: null,
 
   tempHistory: [],
+  temperatureHistory: [],
   voltageHistory: [],
   currentHistory: [],
   powerHistory: [],
   motorCurrentHistory: [],
   vibrationHistory: [],
+  wifiRssiHistory: [],
+  wsLatencyHistory: [],
 
   rpm: null,
   motorSpeed: null,
@@ -42,10 +52,17 @@ export const INITIAL_OFFLINE_TELEMETRY: TelemetryState = {
   mechanicalStress: 0,
   electricalStress: 0,
 
-  communicationType: "ESP-NOW",
+  communicationType: "ESP-NOW + WEBSOCKET",
   esp1Online: false,
+  espNowReady: false,
+  webSocketConnected: false,
+  webSocketClients: null,
+  wifiConnected: false,
+  wifiRSSI: null,
+  wifiChannel: null,
+  controlLink: false,
   rfStatus: "LOST",
-  nodesOnline: "ESP-NOW / ESP32 CORE",
+  nodesOnline: "ESP-NOW + WEBSOCKET / ESP32 CORE",
   latency: null,
   packetCount: null,
   lostPackets: null,
@@ -57,7 +74,7 @@ export const INITIAL_OFFLINE_TELEMETRY: TelemetryState = {
 
   systemStatusText: "COMMUNICATION LOST",
   crisisLevel: "NORMAL",
-  crisisDescriptions: ["Waiting for ESP32 #1 Core", "Connecting to ws://192.168.4.1:81"],
+  crisisDescriptions: ["Waiting for ESP32 #1 Core", "Target endpoint: ws://<IP>:81"],
   survivalMode: "STANDBY",
   survivalModeSubtext: "WAITING FOR CORE",
 
@@ -70,11 +87,11 @@ export const INITIAL_OFFLINE_TELEMETRY: TelemetryState = {
   rfLinkStatus: "LOST",
 
   reasons: [
-    "Searching for ESP32 #1 WebSocket server...",
-    "Connect to WiFi: BLACKSUN_CORE (blacksun123)",
-    "Target endpoint: ws://192.168.4.1:81",
+    "Waiting for ESP32 #1 WebSocket telemetry stream...",
+    "Connect laptop to phone hotspot (BLACKSUN_HOTSPOT / blacksuns123)",
+    "Enter assigned ESP32 IP in SETTINGS and click CONNECT",
   ],
-  subNote: "System will immediately stream real hardware telemetry upon connection.",
+  subNote: "Awaiting live telemetry packet from ESP32 Survival Core.",
   footerTag: "AUTONOMOUS | RESILIENT | CONTINUOUS",
 
   heater: false,
@@ -87,6 +104,10 @@ export const INITIAL_OFFLINE_TELEMETRY: TelemetryState = {
   heaterOn: false,
   buzzerOn: false,
 
+  redLED: false,
+  greenLED: false,
+  yellowLED: false,
+  blueLED: false,
   ledRed: false,
   ledGreen: false,
   ledYellow: false,
@@ -108,34 +129,50 @@ export const INITIAL_EVENTS: LogEvent[] = [
     category: "SYSTEM",
     severity: "INFO",
     title: "BLACKSUN CORE INITIALIZED",
-    details: "Ready to connect to ESP32 #1 WebSocket at ws://192.168.4.1:81",
+    details: "Ready for ESP32 #1 WebSocket connection over local hotspot.",
   },
 ];
 
 /**
  * Maps raw JSON payload from ESP32 #1 to normalized TelemetryState.
- * Adheres strictly to BLACKSUN hardware rules and thresholds:
- * - temp < 28: NORMAL
- * - 28 <= temp <= 35: WARNING / COOLING
- * - temp > 35: CRITICAL / SURVIVAL
- * - vib < 3: NORMAL, vib >= 3: VIBRATION ALERT
- * - RPM: null / -- (no fabrication)
- * - Current / Power unit normalization
+ * Strict adherence to hardware logic:
+ * - temperature < 29°C: MOTOR ON, FAN OFF, NORMAL / GREEN
+ * - temperature >= 29°C and < 35°C: MOTOR OFF, FAN ON, WARNING / RED
+ * - temperature >= 35°C: MOTOR OFF, FAN FULL, HEATER OFF, CRITICAL / SURVIVAL
+ * - vibration < 3.0: NORMAL
+ * - vibration >= 3.0: ALERT
+ * - motor indicator: motorOn && vibration < 3 -> BLUE; motorOn && vibration >= 3 -> YELLOW
+ * - RPM: null / -- (never fabricate)
+ * - ACS712: not fabricated, INA219 current used and labeled accurately
  */
 export function mapESP32ToTelemetryState(
   raw: ESP32TelemetryRaw,
-  prevState: TelemetryState
+  prevState: TelemetryState,
+  wsRttLatency?: number | null,
+  isRealHardware = false
 ): TelemetryState {
-  // Normalize Current (INA219): if > 50, it was sent in mA, convert to A
-  let currentVal = raw.current !== undefined ? raw.current : prevState.current;
-  if (currentVal !== null && currentVal > 50) {
-    currentVal = parseFloat((currentVal / 1000).toFixed(3));
+  // Normalize Current (INA219)
+  let currentA: number | null = null;
+  if (raw.currentA !== undefined && raw.currentA !== null) {
+    currentA = raw.currentA;
+  } else if (raw.current_mA !== undefined && raw.current_mA !== null) {
+    currentA = parseFloat((raw.current_mA / 1000).toFixed(3));
+  } else if (raw.current !== undefined && raw.current !== null) {
+    currentA = raw.current > 50 ? parseFloat((raw.current / 1000).toFixed(3)) : raw.current;
+  } else {
+    currentA = prevState.currentA ?? prevState.current;
   }
 
-  // Normalize Power (INA219): if > 100, sent in mW, convert to W
-  let powerVal = raw.power !== undefined ? raw.power : prevState.power;
-  if (powerVal !== null && powerVal > 100) {
-    powerVal = parseFloat((powerVal / 1000).toFixed(2));
+  // Normalize Power (INA219)
+  let powerW: number | null = null;
+  if (raw.powerW !== undefined && raw.powerW !== null) {
+    powerW = raw.powerW;
+  } else if (raw.power_mW !== undefined && raw.power_mW !== null) {
+    powerW = parseFloat((raw.power_mW / 1000).toFixed(2));
+  } else if (raw.power !== undefined && raw.power !== null) {
+    powerW = raw.power > 100 ? parseFloat((raw.power / 1000).toFixed(2)) : raw.power;
+  } else {
+    powerW = prevState.powerW ?? prevState.power;
   }
 
   const tempVal = raw.temperature !== undefined ? raw.temperature : prevState.temperature;
@@ -150,15 +187,15 @@ export function mapESP32ToTelemetryState(
   }
 
   // Hardware Thresholds:
-  // temp < 28: NORMAL
-  // 28 <= temp <= 35: WARNING / COOLING
-  // temp > 35: CRITICAL / SURVIVAL
+  // temp < 29°C: NORMAL
+  // 29°C <= temp < 35°C: HIGH / WARNING
+  // temp >= 35°C: CRITICAL / SURVIVAL
   const tempStatus: "NORMAL" | "HIGH" | "CRITICAL" =
     tempVal === null
       ? "NORMAL"
-      : tempVal > 35.0
+      : tempVal >= 35.0
       ? "CRITICAL"
-      : tempVal >= 28.0
+      : tempVal >= 29.0
       ? "HIGH"
       : "NORMAL";
 
@@ -168,12 +205,12 @@ export function mapESP32ToTelemetryState(
   const vibrationAlert: "NORMAL" | "HIGH" | "CRITICAL" =
     vibVal === null ? "NORMAL" : vibVal >= 3.0 ? "HIGH" : "NORMAL";
 
-  // Crisis level classification
+  // Crisis level classification from telemetry or evaluated state
   let crisisLevel: "NORMAL" | "WARNING" | "CRITICAL" = "NORMAL";
   if (raw.crisisLevel) {
     const cl = String(raw.crisisLevel).toUpperCase();
     if (cl === "CRITICAL" || cl === "SURVIVAL") crisisLevel = "CRITICAL";
-    else if (cl === "WARNING" || cl === "ALERT") crisisLevel = "WARNING";
+    else if (cl === "WARNING" || cl === "ALERT" || cl === "COOLING") crisisLevel = "WARNING";
     else crisisLevel = "NORMAL";
   } else {
     if (tempStatus === "CRITICAL" || vibStatus === "CRITICAL") {
@@ -185,118 +222,140 @@ export function mapESP32ToTelemetryState(
     }
   }
 
-  // Actuator actual states from ESP32
+  // Actuator actual states from ESP32 telemetry (authoritative)
   const motorOn = raw.motorOn !== undefined ? Boolean(raw.motorOn) : prevState.motorOn;
   const fanOn = raw.fanOn !== undefined ? Boolean(raw.fanOn) : prevState.fanOn;
   const heaterOn = raw.heaterOn !== undefined ? Boolean(raw.heaterOn) : prevState.heaterOn;
   const buzzerOn = raw.buzzerOn !== undefined ? Boolean(raw.buzzerOn) : prevState.buzzerOn;
 
-  // LED states based on hardware rule:
-  // LED RED: temperature >= 29
-  // LED GREEN: temperature < 29
-  // LED YELLOW: motorOn && vibration >= 3
-  // LED BLUE: motorOn && vibration < 3
-  const ledRed = tempVal !== null && tempVal >= 29.0;
-  const ledGreen = tempVal !== null && tempVal < 29.0;
-  const ledYellow = motorOn && (vibVal ?? 0) >= 3.0;
-  const ledBlue = motorOn && (vibVal ?? 0) < 3.0;
+  // LED states based on hardware rule and direct telemetry:
+  // RED LED: temp >= 29°C
+  // GREEN LED: temp < 29°C
+  // YELLOW LED: motorOn && vibration >= 3.0
+  // BLUE LED: motorOn && vibration < 3.0
+  const redLED = raw.redLED !== undefined ? Boolean(raw.redLED) : (tempVal !== null && tempVal >= 29.0);
+  const greenLED = raw.greenLED !== undefined ? Boolean(raw.greenLED) : (tempVal !== null && tempVal < 29.0);
+  const yellowLED = raw.yellowLED !== undefined ? Boolean(raw.yellowLED) : (motorOn && (vibVal ?? 0) >= 3.0);
+  const blueLED = raw.blueLED !== undefined ? Boolean(raw.blueLED) : (motorOn && (vibVal ?? 0) < 3.0);
 
   // Motor & Fan speeds (PWM 0-255)
   const motorSpeed = raw.motorSpeed !== undefined ? raw.motorSpeed : prevState.motorSpeed;
   const fanSpeed = raw.fanSpeed !== undefined ? raw.fanSpeed : prevState.fanSpeed;
-  const motorLoad = motorSpeed !== null ? Math.round((motorSpeed / 255) * 100) : null;
 
-  // Calculate failure risk score (0-100)
+  // Failure risk calculation (0-100)
   let failureRisk = 12;
-  if (tempVal !== null && tempVal > 35.0) {
+  if (tempVal !== null && tempVal >= 35.0) {
     failureRisk = Math.min(100, Math.round(85 + (tempVal - 35.0) * 3));
-  } else if (tempVal !== null && tempVal >= 28.0) {
-    failureRisk = Math.round(40 + (tempVal - 28.0) * 6);
+  } else if (tempVal !== null && tempVal >= 29.0) {
+    failureRisk = Math.round(40 + (tempVal - 29.0) * 6);
   } else if (vibVal !== null && vibVal >= 3.0) {
     failureRisk = Math.max(failureRisk, 82);
   }
 
-  // Stresses
+  // Stress indices
   const thermalStress = tempVal !== null ? Math.min(100, Math.round((tempVal / 45) * 100)) : 0;
   const mechanicalStress = vibVal !== null ? Math.min(100, Math.round((vibVal / 5) * 100)) : 0;
-  const electricalStress = currentVal !== null ? Math.min(100, Math.round((currentVal / 3) * 100)) : 0;
+  const electricalStress = currentA !== null ? Math.min(100, Math.round((currentA / 3) * 100)) : 0;
 
-  // Decision determination
+  // Decision determination (ESP32 authoritative string or hardware rule)
   let decision = raw.decision || "";
   if (!decision) {
-    if (tempStatus === "CRITICAL") decision = "SURVIVAL RESPONSE";
-    else if (tempStatus === "HIGH") decision = "COOLING";
-    else if (vibStatus === "CRITICAL") decision = "VIBRATION MITIGATION";
-    else decision = "NORMAL OPERATION";
+    if (tempStatus === "CRITICAL") decision = "SURVIVE";
+    else if (tempStatus === "HIGH") decision = "COOL";
+    else if (vibStatus === "CRITICAL") decision = "MONITOR VIBRATION";
+    else decision = "RUN";
   }
 
-  // Real Hardware Reasons List
+  // Actual Hardware Reason from ESP32
   const reasons: string[] = [];
   if (raw.reason) {
     reasons.push(raw.reason);
-  }
-  if (tempVal !== null) {
-    if (tempVal < 28.0) {
-      reasons.push("Temperature below cooling threshold (28°C)");
-    } else if (tempVal <= 35.0) {
-      reasons.push("Temperature reached 28°C cooling boundary");
-    } else {
-      reasons.push("Temperature above critical 35°C threshold");
+  } else {
+    if (tempVal !== null) {
+      if (tempVal < 29.0) {
+        reasons.push("Temperature below 29C - motor running");
+      } else if (tempVal < 35.0) {
+        reasons.push("Temperature reached 29C - motor stopped and fan activated");
+      } else {
+        reasons.push("Critical temperature - motor stopped and fan at full speed");
+      }
     }
+    if (motorOn) {
+      reasons.push("Motor running normally");
+    }
+    if (fanOn) {
+      reasons.push("Cooling fan activated");
+    }
+    if (vibVal !== null && vibVal >= 3.0) {
+      reasons.push("Motor vibration above configured limit (>= 3.0g)");
+    }
+    if (!heaterOn && tempVal !== null && tempVal >= 29.0) {
+      reasons.push("Heater disabled for thermal protection");
+    }
+    if (raw.ds18b20OK === false) reasons.push("Temperature sensor unavailable (DS18B20 FAIL)");
+    if (raw.ina219OK === false) reasons.push("Current/Voltage sensor unavailable (INA219 FAIL)");
+    if (raw.mpu6050OK === false) reasons.push("Vibration sensor unavailable (MPU6050 FAIL)");
   }
-  if (motorOn) {
-    reasons.push("Motor running normally");
-  } else if (tempVal !== null && tempVal > 35.0) {
-    reasons.push("Motor stopped for thermal protection");
-  }
-  if (fanOn) {
-    reasons.push("Cooling fan activated");
-  }
-  if (vibVal !== null && vibVal >= 3.0) {
-    reasons.push("Motor vibration alert detected (>= 3.0g)");
-  }
-  if (!heaterOn && tempVal !== null && tempVal >= 28.0) {
-    reasons.push("Heater disabled for thermal protection");
-  }
-  if (raw.ds18b20OK === false) reasons.push("DS18B20 sensor alert");
-  if (raw.ina219OK === false) reasons.push("INA219 sensor alert");
-  if (raw.mpu6050OK === false) reasons.push("MPU6050 sensor alert");
   if (reasons.length === 0) {
     reasons.push("All monitored parameters within nominal limits");
   }
 
-  // Rolling history buffer updater (retains latest 100 points)
-  const appendHistory = (arr: number[], val: number | null, max = 100) => {
+  // Rolling history buffer updater (retains latest 120 points)
+  const appendHistory = (arr: number[], val: number | null, max = 120) => {
     if (val === null || isNaN(val)) return arr;
     const updated = [...arr, val];
     return updated.length > max ? updated.slice(updated.length - max) : updated;
   };
 
+  const updatedTempHistory = appendHistory(prevState.tempHistory, tempVal);
+  const updatedVoltHistory = appendHistory(prevState.voltageHistory, voltVal);
+  const updatedCurrHistory = appendHistory(prevState.currentHistory, currentA);
+  const updatedPowerHistory = appendHistory(prevState.powerHistory, powerW);
+  const updatedVibHistory = appendHistory(prevState.vibrationHistory, vibVal);
+  const updatedRssiHistory = appendHistory(prevState.wifiRssiHistory, raw.wifiRSSI ?? null);
+  const updatedLatencyHistory = appendHistory(
+    prevState.wsLatencyHistory,
+    wsRttLatency !== undefined ? wsRttLatency : prevState.wsLatency
+  );
+
+  const ipAddress = raw.ip || prevState.ip;
+  const latencyVal = wsRttLatency !== undefined ? wsRttLatency : prevState.wsLatency;
+
   return {
     ...prevState,
-    isConnected: true,
-    wsStatus: "connected",
+    mode: isRealHardware ? "REAL" : "DEMO",
+    isConnected: isRealHardware,
+    wsStatus: isRealHardware ? "connected" : prevState.wsStatus,
+    wsLatency: latencyVal,
+    ip: ipAddress,
 
     temperature: tempVal,
     temperatureRate: tempRate,
     voltage: voltVal,
-    current: currentVal,
-    power: powerVal,
-    motorCurrent: currentVal, // INA219 current
-    motorHealthCurrent: currentVal,
+    current: currentA,
+    currentA,
+    current_mA: raw.current_mA ?? (currentA !== null ? currentA * 1000 : null),
+    power: powerW,
+    powerW,
+    power_mW: raw.power_mW ?? (powerW !== null ? powerW * 1000 : null),
+    motorCurrent: currentA,
+    motorHealthCurrent: currentA,
     vibration: vibVal,
     motorSpeed,
     fanSpeed,
 
-    tempHistory: appendHistory(prevState.tempHistory, tempVal),
-    voltageHistory: appendHistory(prevState.voltageHistory, voltVal),
-    currentHistory: appendHistory(prevState.currentHistory, currentVal),
-    powerHistory: appendHistory(prevState.powerHistory, powerVal),
-    motorCurrentHistory: appendHistory(prevState.motorCurrentHistory, currentVal),
-    vibrationHistory: appendHistory(prevState.vibrationHistory, vibVal),
+    tempHistory: updatedTempHistory,
+    temperatureHistory: updatedTempHistory,
+    voltageHistory: updatedVoltHistory,
+    currentHistory: updatedCurrHistory,
+    powerHistory: updatedPowerHistory,
+    motorCurrentHistory: updatedCurrHistory,
+    vibrationHistory: updatedVibHistory,
+    wifiRssiHistory: updatedRssiHistory,
+    wsLatencyHistory: updatedLatencyHistory,
 
-    rpm: null, // Always null / N/A
-    motorLoad,
+    rpm: null, // Strictly null / -- per hardware spec (no tachometer)
+    motorLoad: null, // Not fabricated
     failureRisk,
     motorState: crisisLevel === "CRITICAL" ? "CRITICAL" : crisisLevel === "WARNING" ? "WARNING" : "NORMAL",
     thermalStress,
@@ -311,12 +370,16 @@ export function mapESP32ToTelemetryState(
     fan: fanOn,
     motor: motorOn,
     buzzer: buzzerOn,
-    relay: motorOn, // Disconnected during protective trip
+    relay: motorOn,
 
-    ledRed,
-    ledGreen,
-    ledYellow,
-    ledBlue,
+    redLED,
+    greenLED,
+    yellowLED,
+    blueLED,
+    ledRed: redLED,
+    ledGreen: greenLED,
+    ledYellow: yellowLED,
+    ledBlue: blueLED,
 
     ds18b20OK: raw.ds18b20OK ?? true,
     ina219OK: raw.ina219OK ?? true,
@@ -331,17 +394,27 @@ export function mapESP32ToTelemetryState(
     vibrationAlert,
 
     reasons,
-    subNote: raw.systemState || (crisisLevel === "CRITICAL" ? "SURVIVAL RESPONSE ACTIVE" : "DETERMINISTIC SAFETY LOOP RUNNING"),
-    footerTag: crisisLevel === "CRITICAL" ? "AUTONOMOUS SAFETY ACTION TAKEN" : "NO HUMAN INTERVENTION REQUIRED.",
-    survivalMode: crisisLevel === "CRITICAL" ? "ACTIVE" : "STANDBY",
-    survivalModeSubtext: crisisLevel === "CRITICAL" ? "SURVIVAL MITIGATION" : "READY TO ADAPT",
+    subNote: raw.systemState || (crisisLevel === "CRITICAL" ? "SURVIVAL MODE ACTIVE" : "DETERMINISTIC SAFETY LOOP RUNNING"),
+    footerTag: isRealHardware
+      ? (crisisLevel === "CRITICAL" ? "AUTONOMOUS SAFETY ACTION TAKEN" : "NO HUMAN INTERVENTION REQUIRED.")
+      : "DEMO SIMULATION ACTIVE • RECONNECTING WEBSOCKET...",
+    survivalMode: crisisLevel === "CRITICAL" ? "SURVIVE" : "STANDBY",
+    survivalModeSubtext: crisisLevel === "CRITICAL" ? "CRITICAL SURVIVAL ENGAGED" : "READY TO ADAPT",
 
-    communicationType: raw.communication || "ESP-NOW",
-    esp1Online: raw.esp1Online ?? true,
-    rfStatus: "CONNECTED",
-    rfLinkStatus: "CONNECTED",
-    nodesOnline: "ESP-NOW / ESP32 CORE",
-    uptimeSeconds: raw.uptime ?? null,
+    systemStatusText: isRealHardware ? "SYSTEM OPERATIONAL." : "DEMO MODE (SIMULATED)",
+    communicationType: isRealHardware ? (raw.communication || "ESP-NOW + WEBSOCKET") : "SIMULATION (DEMO)",
+    esp1Online: isRealHardware ? (raw.esp1Online ?? true) : false,
+    espNowReady: isRealHardware ? (raw.espNowReady ?? true) : false,
+    webSocketConnected: isRealHardware ? (raw.webSocketConnected ?? true) : false,
+    webSocketClients: isRealHardware ? (raw.webSocketClients ?? 1) : 0,
+    wifiConnected: isRealHardware ? (raw.wifiConnected ?? true) : false,
+    wifiRSSI: raw.wifiRSSI !== undefined ? raw.wifiRSSI : prevState.wifiRSSI,
+    wifiChannel: raw.wifiChannel !== undefined ? raw.wifiChannel : prevState.wifiChannel,
+    controlLink: isRealHardware ? (raw.controlLink ?? true) : false,
+    rfStatus: isRealHardware ? "CONNECTED" : "LOST",
+    rfLinkStatus: isRealHardware ? "CONNECTED" : "LOST",
+    nodesOnline: isRealHardware ? "ESP-NOW + WEBSOCKET / ESP32 CORE" : "DEMO SIMULATOR ACTIVE",
+    uptimeSeconds: raw.uptime ?? raw.timestamp ?? prevState.uptimeSeconds,
 
     lastUpdatedSec: 0,
   };

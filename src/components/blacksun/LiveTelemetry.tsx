@@ -3,7 +3,7 @@ import { useTelemetry } from "../../context/TelemetryContext";
 
 export const LiveTelemetry: React.FC = () => {
   const { telemetry } = useTelemetry();
-  const isConnected = telemetry.isConnected;
+  const isReal = telemetry.mode === "REAL";
 
   const renderSparkline = (data: number[], color: string, height = 28) => {
     const width = 120;
@@ -48,11 +48,11 @@ export const LiveTelemetry: React.FC = () => {
             LIVE TELEMETRY
           </h2>
           <div className="text-[9px] tracking-widest text-[#555555] font-semibold mt-0.5 uppercase">
-            SENSORS ({isConnected ? "STREAMING" : "WAITING FOR CORE"})
+            SENSORS ({isReal ? "REAL HARDWARE STREAM" : "DEMO SIMULATION"})
           </div>
         </div>
         <div className="text-[9.5px] tracking-widest text-[#78766B] font-semibold uppercase">
-          {isConnected ? `UPDATED ${telemetry.lastUpdatedSec} SEC AGO` : "OFFLINE"}
+          {isReal ? `UPDATED ${telemetry.lastUpdatedSec} SEC AGO` : "DEMO ACTIVE (500MS)"}
         </div>
       </div>
 
@@ -69,10 +69,10 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {isConnected && telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C` : "--"}
+              {telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C` : "--"}
             </div>
             <div className="text-[9.5px] font-bold text-[#FF4848] tracking-tight">
-              {isConnected && telemetry.temperatureRate !== null
+              {telemetry.temperatureRate !== null
                 ? `↑ ${telemetry.temperatureRate >= 0 ? "+" : ""}${telemetry.temperatureRate.toFixed(1)} °C/min`
                 : "--"}
             </div>
@@ -99,10 +99,10 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {isConnected && telemetry.voltage !== null ? `${telemetry.voltage.toFixed(1)} V` : "--"}
+              {telemetry.voltage !== null ? `${telemetry.voltage.toFixed(1)} V` : "--"}
             </div>
             <div className="h-3.5 text-[9px] text-[#666661]">
-              {isConnected ? "DC BUS" : "--"}
+              {telemetry.voltage !== null ? "DC BUS" : "--"}
             </div>
           </div>
 
@@ -116,7 +116,7 @@ export const LiveTelemetry: React.FC = () => {
           </div>
         </div>
 
-        {/* 3. CURRENT (INA219) */}
+        {/* 3. SYSTEM CURRENT (INA219) */}
         <div className="relative flex flex-col items-center justify-between px-2 text-center group">
           <div className="h-7 flex items-center justify-center text-[#FF8A24] z-10">
             <svg width="24" height="20" viewBox="0 0 32 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -126,10 +126,12 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {isConnected && telemetry.current !== null ? `${telemetry.current.toFixed(2)} A` : "--"}
+              {(telemetry.currentA ?? telemetry.current) !== null
+                ? `${(telemetry.currentA ?? telemetry.current ?? 0).toFixed(2)} A`
+                : "--"}
             </div>
             <div className="h-3.5 text-[9px] text-[#666661]">
-              {isConnected ? "TOTAL DRAW" : "--"}
+              {(telemetry.currentA ?? telemetry.current) !== null ? "SYSTEM DRAW" : "--"}
             </div>
           </div>
 
@@ -156,10 +158,12 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {isConnected && telemetry.power !== null ? `${telemetry.power.toFixed(1)} W` : "--"}
+              {(telemetry.powerW ?? telemetry.power) !== null
+                ? `${(telemetry.powerW ?? telemetry.power ?? 0).toFixed(1)} W`
+                : "--"}
             </div>
             <div className="h-3.5 text-[9px] text-[#666661]">
-              {isConnected ? "SYSTEM BUS" : "--"}
+              {(telemetry.powerW ?? telemetry.power) !== null ? "SYSTEM BUS" : "--"}
             </div>
           </div>
 
@@ -184,10 +188,10 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {isConnected && telemetry.motorSpeed !== null ? `${telemetry.motorSpeed}` : "--"}
+              {telemetry.motorSpeed !== null ? `${telemetry.motorSpeed}` : "--"}
             </div>
             <div className="h-3.5 text-[9px] font-bold text-[#364E46]">
-              {isConnected ? (telemetry.motorOn ? "MOTOR RUNNING" : "MOTOR OFF") : "--"}
+              {telemetry.motorOn ? "MOTOR RUNNING" : "MOTOR OFF"}
             </div>
           </div>
 
@@ -211,16 +215,16 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {isConnected && telemetry.vibration !== null ? `${telemetry.vibration.toFixed(2)} g` : "--"}
+              {telemetry.vibration !== null ? `${telemetry.vibration.toFixed(2)} g` : "--"}
             </div>
             <div
               className={`h-3.5 text-[9px] font-bold ${
-                isConnected && telemetry.vibration !== null && telemetry.vibration >= 3.0
+                telemetry.vibration !== null && telemetry.vibration >= 3.0
                   ? "text-[#FF4848]"
                   : "text-[#3D6E5C]"
               }`}
             >
-              {isConnected && telemetry.vibration !== null
+              {telemetry.vibration !== null
                 ? telemetry.vibration >= 3.0
                   ? "VIBRATION ALERT"
                   : "NORMAL"

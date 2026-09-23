@@ -6,7 +6,7 @@ export const CommunicationLink: React.FC = () => {
   const [packetProgress, setPacketProgress] = useState(0);
   const [isReceiverHit, setIsReceiverHit] = useState(false);
 
-  const isConnected = telemetry.isConnected && telemetry.rfStatus === "CONNECTED";
+  const isConnected = telemetry.mode === "REAL" || telemetry.mode === "DEMO";
 
   useEffect(() => {
     if (!isConnected) return;
@@ -34,15 +34,15 @@ export const CommunicationLink: React.FC = () => {
             COMMUNICATION LINK
           </h2>
           <div className="text-[9.5px] tracking-widest text-[#555555] font-semibold mt-0.5">
-            ESP-NOW <span className="mx-1 text-[#8A887D]">|</span> {isConnected ? "CONNECTED" : "LOST"}
+            {telemetry.mode === "REAL" ? "ESP-NOW + WEBSOCKET" : "SIMULATION"} <span className="mx-1 text-[#8A887D]">|</span> {telemetry.mode === "REAL" ? "CONNECTED" : "DEMO"}
           </div>
         </div>
         <div className="text-right">
           <div className="text-[9px] tracking-widest text-[#8A887D] font-semibold uppercase">
-            LATENCY
+            {telemetry.mode === "REAL" ? "WS RTT" : "DEMO WS RTT"}
           </div>
           <div className="text-[14px] font-bold tracking-wider text-[#111111]">
-            {telemetry.latency !== null ? `${telemetry.latency} ms` : "--"}
+            {telemetry.wsLatency !== null ? `${telemetry.wsLatency} ms` : telemetry.mode === "DEMO" ? "32 ms" : "--"}
           </div>
         </div>
       </div>
@@ -188,12 +188,12 @@ export const CommunicationLink: React.FC = () => {
       </div>
 
       {/* Bottom Telemetry Line */}
-      <div className="pt-2 border-t border-[#B5B3A7] flex items-center justify-between text-center text-[9.5px] tracking-wider text-[#333333] font-semibold">
-        <span>PACKETS: {telemetry.packetCount !== null ? telemetry.packetCount : "--"}</span>
+      <div className="pt-2 border-t border-[#B5B3A7] flex items-center justify-between text-center text-[9px] tracking-wider text-[#333333] font-semibold">
+        <span>{telemetry.mode === "REAL" ? "WIFI RSSI" : "DEMO WIFI RSSI"}: {telemetry.wifiRSSI !== null ? `${telemetry.wifiRSSI} dBm` : "--"}</span>
         <span className="text-[#8A887D]">|</span>
-        <span>LOST: {telemetry.lostPackets !== null ? telemetry.lostPackets : "--"}</span>
+        <span>CH: {telemetry.wifiChannel !== null ? telemetry.wifiChannel : "--"}</span>
         <span className="text-[#8A887D]">|</span>
-        <span>RSSI: {telemetry.rssi !== null ? `${telemetry.rssi} dBm` : "--"}</span>
+        <span>{telemetry.mode === "REAL" ? `IP: ${telemetry.ip || "--"}` : "MODE: DEMO SIMULATION"}</span>
       </div>
     </div>
   );

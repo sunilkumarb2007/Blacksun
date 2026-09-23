@@ -3,7 +3,8 @@ import { useTelemetry } from "../../context/TelemetryContext";
 
 export const SurvivalDecisionEngine: React.FC = () => {
   const { telemetry, navigatePage } = useTelemetry();
-  const isConnected = telemetry.isConnected;
+  const isReal = telemetry.mode === "REAL";
+  const isConnected = telemetry.temperature !== null;
 
   const isTempCritical = telemetry.tempStatus === "CRITICAL";
   const isTempWarning = telemetry.tempStatus === "HIGH";
@@ -12,7 +13,7 @@ export const SurvivalDecisionEngine: React.FC = () => {
   const isVibAlert = telemetry.vibrationStatus !== "NORMAL";
   const isPowerNormal = isConnected && telemetry.powerCondition === "NORMAL";
   const isMotorRunning = isConnected && telemetry.motorOn;
-  const isRfConnected = isConnected && telemetry.rfLinkStatus === "CONNECTED";
+  const isRfConnected = isReal && telemetry.rfLinkStatus === "CONNECTED";
 
   return (
     <div className="h-full flex flex-col justify-between p-4 bg-[#F4F3ED] select-none font-mono-tech">
@@ -22,7 +23,7 @@ export const SurvivalDecisionEngine: React.FC = () => {
           SURVIVAL DECISION ENGINE
         </h2>
         <div className="text-[9px] tracking-widest text-[#666661] font-semibold mt-0.5 uppercase">
-          MULTI-SENSOR HARDWARE ANALYSIS
+          {isReal ? "MULTI-SENSOR HARDWARE ANALYSIS" : "DETERMINISTIC SIMULATION ANALYSIS"}
         </div>
       </div>
 
@@ -135,17 +136,17 @@ export const SurvivalDecisionEngine: React.FC = () => {
             <div className="flex items-center gap-2">
               <span
                 className={`w-2.5 h-2.5 rounded-full ${
-                  isRfConnected ? "bg-[#3D6E5C]" : "bg-[#FF4848]"
+                  isRfConnected ? "bg-[#3D6E5C]" : !isReal ? "bg-[#FFA133]" : "bg-[#FF4848]"
                 }`}
               />
               <span className="font-bold text-[#111111]">COMMUNICATION</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`font-bold ${isRfConnected ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
-                {isRfConnected ? "CONNECTED" : "LOST"}
+              <span className={`font-bold ${isRfConnected ? "text-[#3D6E5C]" : !isReal ? "text-[#FFA133]" : "text-[#FF4848]"}`}>
+                {isRfConnected ? "CONNECTED" : !isReal ? "DEMO" : "LOST"}
               </span>
-              <span className={`font-bold w-3 text-center ${isRfConnected ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
-                {isRfConnected ? "✓" : "!"}
+              <span className={`font-bold w-3 text-center ${isRfConnected ? "text-[#3D6E5C]" : !isReal ? "text-[#FFA133]" : "text-[#FF4848]"}`}>
+                {isRfConnected ? "✓" : !isReal ? "~" : "!"}
               </span>
             </div>
           </div>

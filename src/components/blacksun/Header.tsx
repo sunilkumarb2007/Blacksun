@@ -11,6 +11,9 @@ export const Header: React.FC = () => {
     isConnected,
     wsStatus,
     reconnectWS,
+    telemetry,
+    wsIp,
+    wsUrl,
   } = useTelemetry();
 
   const [timeStr, setTimeStr] = useState("10:35:29");
@@ -80,31 +83,37 @@ export const Header: React.FC = () => {
           <div className="text-[13px] font-bold text-[#111111]">{timeStr}</div>
         </div>
 
-        {/* System Online / Offline Status Pill */}
+        {/* System Online / Demo Status Pill */}
         <div
           onClick={reconnectWS}
           className="hidden lg:flex items-center gap-2 pl-3 border-l border-[#B5B3A7] text-[10px] cursor-pointer"
-          title={isConnected ? "WebSocket Connected" : "Click to reconnect to ws://192.168.4.1:81"}
+          title={telemetry.mode === "REAL" ? `Connected to ${wsUrl}` : `Demo mode active. Click to reconnect to ${wsUrl}`}
         >
           <span
             className={`w-2.5 h-2.5 rounded-full ${
-              isConnected
+              telemetry.mode === "REAL"
                 ? "bg-[#2E7D32]"
                 : wsStatus === "connecting"
-                ? "bg-[#FFA133] animate-pulse"
-                : "bg-[#FF4848]"
+                ? "bg-[#FFA133] animate-ping"
+                : "bg-[#FFA133]"
             }`}
           />
           <div>
             <div
               className={`font-bold tracking-wider ${
-                isConnected ? "text-[#2E4640]" : "text-[#FF4848]"
+                telemetry.mode === "REAL" ? "text-[#2E4640]" : "text-[#FFA133]"
               }`}
             >
-              {isConnected ? "SYSTEM ONLINE" : wsStatus === "connecting" ? "CONNECTING..." : "COMMUNICATION LOST"}
+              {telemetry.mode === "REAL"
+                ? "SYSTEM ONLINE"
+                : wsStatus === "connecting"
+                ? "CONNECTING (DEMO)"
+                : "DEMO MODE"}
             </div>
             <div className="text-[8.5px] text-[#78766B]">
-              {isConnected ? "ESP32 CORE ACTIVE" : "OFFLINE (192.168.4.1:81)"}
+              {telemetry.mode === "REAL"
+                ? `ESP32 CONNECTED • REAL DATA`
+                : `SIMULATED DATA (${wsIp}:81)`}
             </div>
           </div>
         </div>

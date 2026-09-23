@@ -5,7 +5,16 @@ export const MotorHealth: React.FC = () => {
   const { telemetry, navigatePage } = useTelemetry();
   const isConnected = telemetry.isConnected;
 
+  const isMotorRunning = isConnected && telemetry.motorOn;
   const isVibAlert = isConnected && telemetry.vibration !== null && telemetry.vibration >= 3.0;
+
+  const indicatorColorClass = !isConnected
+    ? "bg-[#9A9890]"
+    : isMotorRunning
+    ? isVibAlert
+      ? "bg-[#EAB308] animate-pulse"
+      : "bg-[#0284C7]"
+    : "bg-[#9A9890]";
 
   return (
     <div className="h-full flex flex-col justify-between p-4 bg-[#F4F3ED] select-none font-mono-tech">
@@ -15,12 +24,16 @@ export const MotorHealth: React.FC = () => {
           MOTOR HEALTH
         </h2>
         <div className="flex items-center gap-1.5 text-[10px] tracking-wider font-bold text-[#111111]">
-          <span
-            className={`w-2.5 h-2.5 rounded-full ${
-              isConnected ? "bg-[#FF4848] animate-beacon" : "bg-[#9A9890]"
-            }`}
-          />
-          <span>{isConnected ? "LIVE" : "OFFLINE"}</span>
+          <span className={`w-2.5 h-2.5 rounded-full ${indicatorColorClass}`} />
+          <span>
+            {!isConnected
+              ? "OFFLINE"
+              : isMotorRunning
+              ? isVibAlert
+                ? "ALERT"
+                : "RUNNING"
+              : "MOTOR OFF"}
+          </span>
         </div>
       </div>
 
@@ -82,13 +95,15 @@ export const MotorHealth: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-[#666661]">CURRENT (INA219)</span>
             <span className="text-[#111111] font-bold text-[13px]">
-              {isConnected && telemetry.current !== null ? `${telemetry.current.toFixed(2)} A` : "--"}
+              {(telemetry.currentA ?? telemetry.current) !== null
+                ? `${(telemetry.currentA ?? telemetry.current ?? 0).toFixed(2)} A`
+                : "--"}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[#666661]">Temperature</span>
             <span className="text-[#111111] font-bold text-[13px]">
-              {isConnected && telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C` : "--"}
+              {telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C` : "--"}
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -98,7 +113,7 @@ export const MotorHealth: React.FC = () => {
                 isVibAlert ? "text-[#FF4848]" : "text-[#2E7D32]"
               }`}
             >
-              {isConnected && telemetry.vibration !== null
+              {telemetry.vibration !== null
                 ? telemetry.vibration >= 3.0
                   ? "VIBRATION ALERT"
                   : "NORMAL"
@@ -108,11 +123,7 @@ export const MotorHealth: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-[#666661]">Motor State</span>
             <span className="text-[#111111] font-bold text-[13px]">
-              {isConnected
-                ? telemetry.motorOn
-                  ? `ON (${telemetry.motorSpeed ?? 180} PWM)`
-                  : "OFF"
-                : "--"}
+              {telemetry.motorOn ? `ON (${telemetry.motorSpeed ?? 180} PWM)` : "OFF"}
             </span>
           </div>
         </div>
@@ -123,13 +134,13 @@ export const MotorHealth: React.FC = () => {
         <div className="flex items-center justify-between mb-1 text-[10px] font-semibold text-[#666661]">
           <span>FAILURE RISK</span>
           <span className="text-[#FF4848] font-bold">
-            {isConnected ? `${telemetry.failureRisk} / 100` : "--"}
+            {`${telemetry.failureRisk} / 100`}
           </span>
         </div>
         <div className="w-full h-2 bg-[#DDDCD3] border border-[#B5B3A7] overflow-hidden p-[0.5px]">
           <div
             className="h-full bg-[#FF4848] transition-all duration-300"
-            style={{ width: `${isConnected ? telemetry.failureRisk : 0}%` }}
+            style={{ width: `${telemetry.failureRisk}%` }}
           />
         </div>
       </div>

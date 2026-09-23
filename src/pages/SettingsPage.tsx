@@ -3,10 +3,42 @@ import { useTelemetry } from "../context/TelemetryContext";
 import { SystemSettings } from "../types/telemetry";
 
 export const SettingsPage: React.FC = () => {
-  const { settings, updateSettings, resetSettingsToDefault, addLogEvent } = useTelemetry();
+  const {
+    settings,
+    updateSettings,
+    resetSettingsToDefault,
+    addLogEvent,
+    wsIp,
+    wsUrl,
+    wsStatus,
+    autoConnect,
+    setWsIp,
+    setAutoConnect,
+    connectWS,
+  } = useTelemetry();
   const [formState, setFormState] = useState<SystemSettings>({ ...settings });
+  const [ipInput, setIpInput] = useState(wsIp);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [saveToast, setSaveToast] = useState(false);
+
+  const handleConnect = () => {
+    const target = ipInput.trim();
+    if (target) {
+      setWsIp(target, true);
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(
+        2,
+        "0"
+      )}:${String(now.getSeconds()).padStart(2, "0")}`;
+      addLogEvent({
+        timestamp: timeStr,
+        category: "COMMUNICATION",
+        severity: "INFO",
+        title: "ESP32 TARGET IP UPDATED",
+        details: `Connecting to ws://${target}:81`,
+      });
+    }
+  };
 
   const handleChange = (key: keyof SystemSettings, val: number) => {
     setFormState((prev) => ({
@@ -72,6 +104,111 @@ export const SettingsPage: React.FC = () => {
             ✓ SETTINGS SAVED & APPLIED
           </div>
         )}
+      </div>
+
+      {/* ESP32 WebSocket Hardware Connection Configuration */}
+      <div className="border border-[#B5B3A7] bg-[#F4F3ED] p-6 space-y-4 max-w-4xl">
+        <div className="flex items-center justify-between border-b border-[#B5B3A7] pb-2">
+          <div className="text-[12px] font-bold text-[#182226] uppercase tracking-wider">
+            BLACKSUN CORE IP & WEBSOCKET
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-[#5A686D] font-bold uppercase">MODE:</span>
+              <span
+                className={`px-2 py-0.5 text-[9.5px] font-bold uppercase ${
+                  telemetry.mode === "REAL"
+                    ? "bg-[#2E7D32] text-white"
+                    : "bg-[#FFA133] text-[#182226]"
+                }`}
+              >
+                {telemetry.mode === "REAL" ? "REAL HARDWARE" : "DEMO SIMULATION"}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-[#5A686D] font-bold uppercase">WEBSOCKET:</span>
+              <span
+                className={`px-2.5 py-0.5 text-[9.5px] font-bold uppercase ${
+                  wsStatus === "connected"
+                    ? "bg-[#2E7D32] text-white"
+                    : wsStatus === "connecting"
+                    ? "bg-[#FFA133] text-[#182226]"
+                    : "bg-[#FF4848] text-white"
+                }`}
+              >
+                {wsStatus === "connected"
+                  ? "CONNECTED"
+                  : wsStatus === "connecting"
+                  ? "CONNECTING"
+                  : wsStatus === "error"
+                  ? "ERROR"
+                  : "DISCONNECTED"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+          {/* IP Input */}
+          <div className="md:col-span-5 space-y-1.5">
+            <label className="text-[11px] text-[#182226] font-semibold block uppercase">
+              BLACKSUN CORE IP
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={ipInput}
+                placeholder="192.168.43.120"
+                onChange={(e) => setIpInput(e.target.value)}
+                className="flex-1 px-3 py-2 bg-[#FFFFFF] border border-[#B5B3A7] text-[#182226] text-[12px] font-mono-tech focus:outline-none focus:border-[#456557]"
+              />
+              <button
+                type="button"
+                onClick={handleConnect}
+                className="border border-[#364E46] bg-[#364E46] text-white px-4 py-2 text-[11px] font-bold hover:bg-[#2C393E] transition-colors uppercase"
+              >
+                CONNECT
+              </button>
+            </div>
+            <span className="text-[9.5px] text-[#5A686D]">
+              Assigned by phone hotspot DHCP server.
+            </span>
+          </div>
+
+          {/* Connection URL Display */}
+          <div className="md:col-span-4 space-y-1.5">
+            <label className="text-[11px] text-[#182226] font-semibold block uppercase">
+              CONNECTION URL
+            </label>
+            <div className="px-3 py-2 bg-[#E8E7DF] border border-[#B5B3A7] text-[#182226] text-[11.5px] font-bold truncate">
+              {wsUrl}
+            </div>
+            <span className="text-[9.5px] text-[#5A686D]">Direct browser WebSocket on Port 81</span>
+          </div>
+
+          {/* Auto Connect Toggle */}
+          <div className="md:col-span-3 space-y-1.5">
+            <label className="text-[11px] text-[#182226] font-semibold block uppercase">
+              AUTO CONNECT
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setAutoConnect(!autoConnect)}
+                className={`px-3 py-2 text-[11px] font-bold border transition-colors ${
+                  autoConnect
+                    ? "bg-[#456557] text-white border-[#456557]"
+                    : "bg-[#FFFFFF] text-[#78766B] border-[#B5B3A7]"
+                }`}
+              >
+                {autoConnect ? "[ ON ]" : "[ OFF ]"}
+              </button>
+              <span className="text-[9.5px] text-[#5A686D]">
+                {autoConnect ? "Auto connects on load" : "Manual only"}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Main Settings Form Grid */}

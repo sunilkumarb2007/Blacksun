@@ -30,27 +30,87 @@ export interface SystemSettings {
   telemetryRateMs: number;          // 500 ms
 }
 
+export type WSConnectionStatus = "connecting" | "connected" | "disconnected" | "error";
+
+export interface BlackSunTelemetry {
+  type: string;
+  temperature: number;
+  voltage: number;
+  current: number;
+  current_mA?: number;
+  currentA?: number;
+  power: number;
+  power_mW?: number;
+  powerW?: number;
+  vibration: number;
+  motorSpeed: number;
+  motorOn: boolean;
+  fanSpeed: number;
+  fanOn: boolean;
+  heaterOn: boolean;
+  buzzerOn: boolean;
+  thermalSurvivalMode: boolean;
+  manualMode: boolean;
+  ds18b20OK: boolean;
+  ina219OK: boolean;
+  mpu6050OK: boolean;
+  redLED: boolean;
+  greenLED: boolean;
+  yellowLED: boolean;
+  blueLED: boolean;
+  crisisLevel: string;
+  systemState: string;
+  decision: string;
+  reason: string;
+  communication: string;
+  espNowReady: boolean;
+  webSocketConnected: boolean;
+  webSocketClients: number;
+  wifiConnected: boolean;
+  wifiRSSI: number;
+  wifiChannel: number;
+  ip: string;
+  uptime: number;
+  timestamp: number;
+  controlLink: boolean;
+  [key: string]: unknown;
+}
+
+export type ESP32TelemetryRaw = Partial<BlackSunTelemetry>;
+
 export interface TelemetryState {
+  // Mode: Real hardware vs Demo simulation
+  mode: "REAL" | "DEMO";
+
   // Connection State
   isConnected: boolean;
-  wsStatus: "connecting" | "connected" | "disconnected";
+  wsStatus: WSConnectionStatus;
+  wsLatency: number | null; // Browser-side WS RTT in ms
+  ip: string | null;
 
   // Live Sensors (real hardware, null or number)
   temperature: number | null; // e.g. 31.4 °C
   temperatureRate: number | null; // e.g. +0.4 °C/min
   voltage: number | null; // e.g. 11.92 V
   current: number | null; // e.g. 1.84 A (INA219)
+  currentA: number | null;
+  current_mA: number | null;
   power: number | null; // e.g. 21.95 W (INA219)
-  motorCurrent: number | null; // same as INA219 current or dedicated
+  powerW: number | null;
+  power_mW: number | null;
+  motorCurrent: number | null; // same as INA219 current
   vibration: number | null; // e.g. 0.08 g (MPU6050)
   
   // Historical buffers for real waveform graphs (latest 60-120 samples)
   tempHistory: number[];
+  temperatureHistory: number[];
   voltageHistory: number[];
   currentHistory: number[];
   powerHistory: number[];
   motorCurrentHistory: number[];
   vibrationHistory: number[];
+  wifiRssiHistory: number[];
+  wsLatencyHistory: number[];
   
   // Motor Health
   rpm: number | null; // Always null / N/A as per hardware spec
@@ -65,9 +125,16 @@ export interface TelemetryState {
   mechanicalStress: number; // 0-100
   electricalStress: number; // 0-100
   
-  // Communication Link (ESP-NOW)
-  communicationType: string; // "ESP-NOW"
+  // Communication Link (ESP-NOW + WebSocket)
+  communicationType: string; // "ESP-NOW + WEBSOCKET"
   esp1Online: boolean;
+  espNowReady: boolean;
+  webSocketConnected: boolean;
+  webSocketClients: number | null;
+  wifiConnected: boolean;
+  wifiRSSI: number | null;
+  wifiChannel: number | null;
+  controlLink: boolean;
   rfStatus: "CONNECTED" | "DEGRADED" | "LOST";
   nodesOnline: string; // "ESP-NOW / ESP32 CORE"
   latency: number | null; // null if not in telemetry
@@ -111,11 +178,11 @@ export interface TelemetryState {
   heaterOn: boolean;
   buzzerOn: boolean;
 
-  // LEDs (calculated dynamically per hardware rule)
-  // LED RED: temp >= 29
-  // LED GREEN: temp < 29
-  // LED YELLOW: motorOn && vibration >= 3
-  // LED BLUE: motorOn && vibration < 3
+  // LEDs (calculated dynamically or direct telemetry)
+  redLED: boolean;
+  greenLED: boolean;
+  yellowLED: boolean;
+  blueLED: boolean;
   ledRed: boolean;
   ledGreen: boolean;
   ledYellow: boolean;

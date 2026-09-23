@@ -5,6 +5,7 @@ import {
   LogEvent,
   CrisisScenario,
   PageId,
+  WSConnectionStatus,
 } from "../types/telemetry";
 import {
   DEFAULT_SETTINGS,
@@ -15,8 +16,8 @@ import {
 import {
   blackSunWS,
   ESP32ControlMessage,
-  WSConnectionStatus,
 } from "../services/blackSunWebSocket";
+import { blackSunSimulator } from "../services/blackSunSimulator";
 
 interface TelemetryContextType {
   telemetry: TelemetryState;
@@ -29,6 +30,15 @@ interface TelemetryContextType {
   showInfoModal: boolean;
   wsStatus: WSConnectionStatus;
   isConnected: boolean;
+  isDemo: boolean;
+  mode: "REAL" | "DEMO";
+  wsIp: string;
+  wsUrl: string;
+  autoConnect: boolean;
+  setWsIp: (ip: string, reconnectImmediately?: boolean) => void;
+  setAutoConnect: (enabled: boolean) => void;
+  connectWS: (ip?: string) => void;
+  disconnectWS: () => void;
   setShowDataModal: (show: boolean) => void;
   setShowInfoModal: (show: boolean) => void;
   setSystemMode: (mode: "SIMULATION" | "HARDWARE") => void;
@@ -70,6 +80,8 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [showDataModal, setShowDataModal] = useState<boolean>(false);
   const [showInfoModal, setShowInfoModal] = useState<boolean>(false);
   const [wsStatus, setWsStatus] = useState<WSConnectionStatus>(blackSunWS.getStatus());
+  const [wsIp, setWsIpState] = useState<string>(blackSunWS.getIp());
+  const [autoConnect, setAutoConnectState] = useState<boolean>(blackSunWS.isAutoConnect());
 
   const addLogEvent = useCallback((eventData: Omit<LogEvent, "id">) => {
     const newEvent: LogEvent = {
@@ -79,32 +91,16 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setEvents((prev) => [newEvent, ...prev.slice(0, 99)]);
   }, []);
 
-  // Subscribe to central WebSocket service
+  // Dual-mode telemetry subscription: REAL hardware vs DEMO simulator
   useEffect(() => {
+    // If hardware is not connected, immediately start DEMO mode simulator
+    if (!blackSunWS.isConnected()) {
+      console.log("[BLACKSUN] DEMO MODE: Auto-starting simulation");
+      blackSunSimulator.start();
+    }
+
     const unsubStatus = blackSunWS.subscribeStatus((status) => {
       setWsStatus(status);
-      setTelemetry((prev) => {
-        if (status === "connected") {
-          return {
-            ...prev,
-            isConnected: true,
-            wsStatus: "connected",
-            rfStatus: "CONNECTED",
-            rfLinkStatus: "CONNECTED",
-            systemStatusText: "SYSTEM OPERATIONAL.",
-          };
-        } else {
-          // When disconnected, mark status as lost but retain previous history buffers
-          return {
-            ...prev,
-            isConnected: false,
-            wsStatus: status,
-            rfStatus: "LOST",
-            rfLinkStatus: "LOST",
-            systemStatusText: "COMMUNICATION LOST",
-          };
-        }
-      });
 
       const now = new Date();
       const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(
@@ -113,35 +109,66 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       )}:${String(now.getSeconds()).padStart(2, "0")}`;
 
       if (status === "connected") {
+        console.log("[BLACKSUN] REAL MODE");
+        blackSunSimulator.stop();
         addLogEvent({
           timestamp: timeStr,
           category: "COMMUNICATION",
           severity: "INFO",
           title: "ESP32 WEBSOCKET CONNECTED",
-          details: "Real hardware telemetry stream active from ws://192.168.4.1:81",
+          details: `Hardware telemetry stream active from ${blackSunWS.getUrl()}`,
         });
-      } else if (status === "disconnected") {
-        addLogEvent({
-          timestamp: timeStr,
-          category: "COMMUNICATION",
-          severity: "WARNING",
-          title: "ESP32 WEBSOCKET DISCONNECTED",
-          details: "Carrier dropped. Attempting automatic reconnection every 2.5s.",
-        });
+      } else {
+        console.log("[BLACKSUN] DEMO MODE: Switching to simulator");
+        blackSunSimulator.start();
+        if (status === "disconnected") {
+          addLogEvent({
+            timestamp: timeStr,
+            category: "COMMUNICATION",
+            severity: "WARNING",
+            title: "ESP32 WEBSOCKET DISCONNECTED",
+            details: "Carrier dropped. Switched to DEMO simulation mode. Reconnecting...",
+          });
+        }
       }
     });
 
-    const unsubTelemetry = blackSunWS.subscribeTelemetry((raw) => {
-      setTelemetry((prev) => mapESP32ToTelemetryState(raw, prev));
+    // Real telemetry listener (priority 1)
+    const unsubRealTelemetry = blackSunWS.subscribeTelemetry((raw) => {
+      blackSunSimulator.stop();
+      setTelemetry((prev) => mapESP32ToTelemetryState(raw, prev, blackSunWS.getLatency(), true));
+      if (raw.ip && raw.ip !== wsIp) {
+        setWsIpState(raw.ip);
+      }
+    });
+
+    // Simulated telemetry listener (runs only when hardware is not connected)
+    const unsubSimTelemetry = blackSunSimulator.subscribe((simRaw) => {
+      if (!blackSunWS.isConnected()) {
+        setTelemetry((prev) => mapESP32ToTelemetryState(simRaw, prev, simRaw.latency ?? 35, false));
+      }
+    });
+
+    // Latency listener
+    const unsubLatency = blackSunWS.subscribeLatency((rtt) => {
+      if (blackSunWS.isConnected()) {
+        setTelemetry((prev) => ({
+          ...prev,
+          wsLatency: rtt,
+        }));
+      }
     });
 
     return () => {
       unsubStatus();
-      unsubTelemetry();
+      unsubRealTelemetry();
+      unsubSimTelemetry();
+      unsubLatency();
+      blackSunSimulator.stop();
     };
-  }, [addLogEvent]);
+  }, [addLogEvent, wsIp]);
 
-  // Track seconds elapsed since last received telemetry packet
+  // Track seconds elapsed
   useEffect(() => {
     const timer = setInterval(() => {
       setTelemetry((prev) => ({
@@ -153,7 +180,6 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return () => clearInterval(timer);
   }, []);
 
-  // Send control command to ESP32 without assuming optimistic UI state
   const sendControl = useCallback((control: ESP32ControlMessage) => {
     return blackSunWS.sendControl(control);
   }, []);
@@ -162,12 +188,51 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     blackSunWS.connect();
   }, []);
 
-  // Actuator Toggle handler: commands ESP32 and waits for real returned telemetry
+  const connectWS = useCallback((ip?: string) => {
+    blackSunWS.connect(ip);
+    if (ip) {
+      setWsIpState(ip);
+    }
+  }, []);
+
+  const disconnectWS = useCallback(() => {
+    blackSunWS.disconnect();
+  }, []);
+
+  const setWsIp = useCallback((newIp: string, reconnectImmediately = true) => {
+    blackSunWS.setIp(newIp, reconnectImmediately);
+    setWsIpState(newIp);
+  }, []);
+
+  const setAutoConnect = useCallback((enabled: boolean) => {
+    blackSunWS.setAutoConnect(enabled);
+    setAutoConnectState(enabled);
+  }, []);
+
+  // Actuator Toggle handler: handles both REAL hardware dispatch and DEMO override
   const toggleActuator = useCallback((actuatorKey: keyof TelemetryState) => {
     setTelemetry((prev) => {
       const isCurrentlyOn = Boolean(prev[actuatorKey]);
       const desiredState = !isCurrentlyOn;
 
+      // DEMO mode: apply command to simulator
+      if (prev.mode === "DEMO") {
+        blackSunSimulator.applyUserCommand({
+          [actuatorKey]: desiredState,
+          ...(actuatorKey === "motor" || actuatorKey === "motorOn"
+            ? { motorOn: desiredState, motorSpeed: desiredState ? 180 : 0 }
+            : {}),
+          ...(actuatorKey === "fan" || actuatorKey === "fanOn"
+            ? { fanOn: desiredState, fanSpeed: desiredState ? 220 : 0 }
+            : {}),
+          ...(actuatorKey === "heater" || actuatorKey === "heaterOn"
+            ? { heaterOn: desiredState }
+            : {}),
+        });
+        return prev;
+      }
+
+      // REAL mode: command ESP32 without assuming optimistic state
       const controlMsg: ESP32ControlMessage = {
         type: "control",
         motorSpeed:
@@ -176,8 +241,8 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             : prev.motorOn ? (prev.motorSpeed ?? 180) : 0,
         fanSpeed:
           actuatorKey === "fan" || actuatorKey === "fanOn"
-            ? desiredState ? 180 : 0
-            : prev.fanOn ? (prev.fanSpeed ?? 180) : 0,
+            ? desiredState ? 220 : 0
+            : prev.fanOn ? (prev.fanSpeed ?? 220) : 0,
         heaterOn:
           actuatorKey === "heater" || actuatorKey === "heaterOn"
             ? desiredState
@@ -188,7 +253,6 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
 
       blackSunWS.sendControl(controlMsg);
-      // Strict rule: NEVER optimistically change state; return prev!
       return prev;
     });
   }, []);
@@ -197,7 +261,6 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const triggerScenario = useCallback((scenario: CrisisScenario) => {
     setActiveScenario(scenario);
 
-    // If connected to ESP32, send manual control payload
     if (blackSunWS.isConnected()) {
       if (scenario === "NORMAL") {
         blackSunWS.sendControl({
@@ -249,91 +312,58 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         });
       }
     } else {
-      // If hardware is not connected yet, allow previewing the scenario state
+      // In DEMO mode, override simulator state directly
       if (scenario === "NORMAL") {
-        setTelemetry((prev) =>
-          mapESP32ToTelemetryState(
-            {
-              type: "telemetry",
-              temperature: 25.4,
-              voltage: 11.9,
-              current: 1.82,
-              power: 21.6,
-              vibration: 0.08,
-              motorSpeed: 180,
-              fanSpeed: 0,
-              motorOn: true,
-              fanOn: false,
-              heaterOn: false,
-              buzzerOn: false,
-              thermalSurvivalMode: false,
-              crisisLevel: "NORMAL",
-              systemState: "SYSTEM NOMINAL",
-              decision: "NORMAL OPERATION",
-              reason: "Temperature below cooling threshold (28°C)",
-              communication: "ESP-NOW",
-              esp1Online: true,
-              uptime: 1042,
-            },
-            prev
-          )
-        );
+        blackSunSimulator.applyUserCommand({
+          temperature: 25.4,
+          voltage: 11.9,
+          currentA: 1.45,
+          vibration: 0.12,
+          motorOn: true,
+          fanOn: false,
+          motorSpeed: 180,
+          fanSpeed: 0,
+          heaterOn: false,
+          buzzerOn: false,
+          crisisLevel: "NORMAL",
+          systemState: "NORMAL OPERATION",
+          decision: "RUN",
+          reason: "Temperature below 29C - motor running",
+        });
       } else if (scenario === "THERMAL_EVENT") {
-        setTelemetry((prev) =>
-          mapESP32ToTelemetryState(
-            {
-              type: "telemetry",
-              temperature: 36.8,
-              voltage: 11.7,
-              current: 1.2,
-              power: 14.0,
-              vibration: 0.09,
-              motorSpeed: 0,
-              fanSpeed: 255,
-              motorOn: false,
-              fanOn: true,
-              heaterOn: false,
-              buzzerOn: true,
-              thermalSurvivalMode: true,
-              crisisLevel: "CRITICAL",
-              systemState: "THERMAL SURVIVAL",
-              decision: "SURVIVAL RESPONSE",
-              reason: "Temperature above critical threshold (>35°C)",
-              communication: "ESP-NOW",
-              esp1Online: true,
-              uptime: 1250,
-            },
-            prev
-          )
-        );
+        blackSunSimulator.applyUserCommand({
+          temperature: 36.8,
+          voltage: 11.7,
+          currentA: 0.95,
+          vibration: 0.09,
+          motorOn: false,
+          fanOn: true,
+          motorSpeed: 0,
+          fanSpeed: 255,
+          heaterOn: false,
+          buzzerOn: true,
+          crisisLevel: "CRITICAL",
+          systemState: "SURVIVAL MODE",
+          decision: "SURVIVE",
+          reason: "Critical temperature - motor stopped and fan at full speed",
+        });
       } else if (scenario === "MOTOR_VIBRATION") {
-        setTelemetry((prev) =>
-          mapESP32ToTelemetryState(
-            {
-              type: "telemetry",
-              temperature: 27.2,
-              voltage: 11.8,
-              current: 2.1,
-              power: 24.7,
-              vibration: 3.6,
-              motorSpeed: 120,
-              fanSpeed: 0,
-              motorOn: true,
-              fanOn: false,
-              heaterOn: false,
-              buzzerOn: true,
-              thermalSurvivalMode: false,
-              crisisLevel: "CRITICAL",
-              systemState: "VIBRATION ALERT",
-              decision: "VIBRATION MITIGATION",
-              reason: "Motor vibration alert detected (>= 3.0g)",
-              communication: "ESP-NOW",
-              esp1Online: true,
-              uptime: 1300,
-            },
-            prev
-          )
-        );
+        blackSunSimulator.applyUserCommand({
+          temperature: 27.2,
+          voltage: 11.8,
+          currentA: 2.1,
+          vibration: 3.8,
+          motorOn: true,
+          fanOn: false,
+          motorSpeed: 180,
+          fanSpeed: 0,
+          heaterOn: false,
+          buzzerOn: true,
+          crisisLevel: "WARNING",
+          systemState: "VIBRATION ALERT",
+          decision: "MONITOR VIBRATION",
+          reason: "Motor vibration above configured limit (>= 3.0g)",
+        });
       }
     }
   }, []);
@@ -388,7 +418,16 @@ export const TelemetryProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         showDataModal,
         showInfoModal,
         wsStatus,
-        isConnected: wsStatus === "connected",
+        isConnected: telemetry.mode === "REAL",
+        isDemo: telemetry.mode === "DEMO",
+        mode: telemetry.mode,
+        wsIp,
+        wsUrl: `ws://${wsIp}:81`,
+        autoConnect,
+        setWsIp,
+        setAutoConnect,
+        connectWS,
+        disconnectWS,
         setShowDataModal,
         setShowInfoModal,
         setSystemMode,

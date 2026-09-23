@@ -7,76 +7,76 @@ export const LiveTelemetryPage: React.FC = () => {
   const { telemetry, settings } = useTelemetry();
   const [timeframe, setTimeframe] = useState<Timeframe>("live");
 
-  const isConnected = telemetry.isConnected;
+  const hasData = telemetry.temperature !== null;
 
   const telemetryChannels = [
     {
       id: "temp",
       name: "TEMPERATURE (DS18B20)",
-      val: isConnected && telemetry.temperature !== null ? telemetry.temperature.toFixed(1) : "--",
-      unit: "°C",
-      warnThreshold: `${settings.tempWarningThreshold.toFixed(1)}°C (28°C)`,
+      val: hasData ? `${telemetry.temperature!.toFixed(1)} °C` : "--",
+      unit: "DS18B20",
+      warnThreshold: `${settings.tempWarningThreshold.toFixed(1)}°C (29°C)`,
       critThreshold: `${settings.tempCriticalThreshold.toFixed(1)}°C (35°C)`,
       history: telemetry.tempHistory,
       color: "#FF4848",
-      status: !isConnected ? "OFFLINE" : (telemetry.temperature ?? 0) > 35 ? "CRITICAL" : (telemetry.temperature ?? 0) >= 28 ? "WARNING" : "NORMAL",
+      status: !hasData ? "OFFLINE" : (telemetry.temperature ?? 0) >= 35 ? "CRITICAL" : (telemetry.temperature ?? 0) >= 29 ? "WARNING" : "NORMAL",
     },
     {
       id: "volt",
       name: "BUS VOLTAGE (INA219)",
-      val: isConnected && telemetry.voltage !== null ? telemetry.voltage.toFixed(1) : "--",
-      unit: "V",
+      val: hasData && telemetry.voltage !== null ? `${telemetry.voltage.toFixed(1)} V` : "--",
+      unit: "INA219",
       warnThreshold: "11.2 V",
       critThreshold: "10.5 V",
       history: telemetry.voltageHistory,
       color: "#456557",
-      status: !isConnected ? "OFFLINE" : telemetry.powerCondition,
+      status: !hasData ? "OFFLINE" : telemetry.powerCondition,
     },
     {
       id: "power_curr",
       name: "BUS POWER & CURRENT (INA219)",
-      val: isConnected && telemetry.power !== null && telemetry.current !== null
-        ? `${telemetry.power.toFixed(1)} W / ${telemetry.current.toFixed(2)} A`
+      val: hasData && (telemetry.powerW !== null || telemetry.power !== null) && (telemetry.currentA !== null || telemetry.current !== null)
+        ? `${(telemetry.powerW ?? telemetry.power ?? 0).toFixed(1)} W / ${(telemetry.currentA ?? telemetry.current ?? 0).toFixed(2)} A`
         : "--",
       unit: "INA219",
       warnThreshold: "26.0 W",
       critThreshold: "38.0 W",
       history: telemetry.powerHistory,
       color: "#0284C7",
-      status: !isConnected ? "OFFLINE" : (telemetry.power ?? 0) > 38 ? "CRITICAL" : "NORMAL",
+      status: !hasData ? "OFFLINE" : (telemetry.power ?? 0) > 38 ? "CRITICAL" : "NORMAL",
     },
     {
       id: "vib",
       name: "VIBRATION SPECTRUM (MPU6050)",
-      val: isConnected && telemetry.vibration !== null ? telemetry.vibration.toFixed(2) : "--",
-      unit: "g",
+      val: hasData && telemetry.vibration !== null ? `${telemetry.vibration.toFixed(2)} g` : "--",
+      unit: "MPU6050",
       warnThreshold: `${settings.vibrationWarningThreshold.toFixed(1)} g (3.0g)`,
       critThreshold: `${settings.vibrationCriticalThreshold.toFixed(1)} g (5.0g)`,
       history: telemetry.vibrationHistory,
       color: "#FFA133",
-      status: !isConnected ? "OFFLINE" : (telemetry.vibration ?? 0) >= 3.0 ? "ALERT" : "NORMAL",
+      status: !hasData ? "OFFLINE" : (telemetry.vibration ?? 0) >= 3.0 ? "ALERT" : "NORMAL",
     },
     {
       id: "motor_pwm",
       name: "MOTOR PWM & SPEED (INA219 / BTS7960)",
-      val: isConnected ? (telemetry.motorOn ? `ON (${telemetry.motorSpeed ?? 180})` : "OFF") : "--",
+      val: hasData ? (telemetry.motorOn ? `ON (${telemetry.motorSpeed ?? 180} PWM)` : "OFF") : "--",
       unit: "PWM 0-255",
       warnThreshold: "220 PWM",
       critThreshold: "255 PWM",
       history: telemetry.motorCurrentHistory,
       color: "#8B5CF6",
-      status: !isConnected ? "OFFLINE" : telemetry.motorOn ? "RUNNING" : "HALTED",
+      status: !hasData ? "OFFLINE" : telemetry.motorOn ? "RUNNING" : "HALTED",
     },
     {
       id: "comm",
-      name: "COMMUNICATION LINK (ESP-NOW)",
-      val: isConnected ? "ESP-NOW" : "LINK LOST",
-      unit: isConnected ? "CONNECTED" : "OFFLINE",
-      warnThreshold: "TIMEOUT >200ms",
+      name: telemetry.mode === "REAL" ? "COMMUNICATION & WIFI RSSI" : "DEMO COMMUNICATION SPECTRUM",
+      val: telemetry.wifiRSSI !== null ? `${telemetry.wifiRSSI} dBm` : "--",
+      unit: telemetry.mode === "REAL" ? "WIFI RSSI" : "DEMO RSSI",
+      warnThreshold: "RSSI <-75 dBm",
       critThreshold: "CARRIER DROP",
-      history: isConnected ? [1, 1, 1, 1, 1, 1, 1, 1] : [0, 0, 0, 0],
+      history: telemetry.wifiRssiHistory.length > 0 ? telemetry.wifiRssiHistory : telemetry.wsLatencyHistory,
       color: "#19D3C2",
-      status: isConnected ? "CONNECTED" : "LOST",
+      status: telemetry.mode === "REAL" ? "CONNECTED" : "DEMO",
     },
   ];
 
@@ -149,9 +149,20 @@ export const LiveTelemetryPage: React.FC = () => {
             <h1 className="font-display font-black text-[20px] text-[#182226] tracking-wider uppercase">
               LIVE TELEMETRY & WAVEFORM INSTRUMENTATION
             </h1>
+            <span
+              className={`px-2 py-0.5 text-[9.5px] font-bold uppercase ${
+                telemetry.mode === "REAL"
+                  ? "bg-[#2E7D32] text-white"
+                  : "bg-[#FFA133] text-[#182226]"
+              }`}
+            >
+              {telemetry.mode === "REAL" ? "REAL HARDWARE" : "DEMO SIMULATION"}
+            </span>
           </div>
           <p className="text-[11px] text-[#5A686D]">
-            REAL HARDWARE SENSOR STREAMS • ZERO CLOUD WEBSOCKET TELEMETRY
+            {telemetry.mode === "REAL"
+              ? "REAL HARDWARE SENSOR STREAMS • ZERO CLOUD WEBSOCKET TELEMETRY"
+              : "DETERMINISTIC 500MS SIMULATED STREAM • ALTERNATING HARDWARE SCENARIOS"}
           </p>
         </div>
 

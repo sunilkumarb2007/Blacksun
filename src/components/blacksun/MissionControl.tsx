@@ -50,7 +50,7 @@ export const MissionControl: React.FC = () => {
             </span>
           </div>
           <div className="text-[9px] tracking-widest text-[#8A887D] font-semibold mt-0.5 uppercase">
-            {isConnected ? "HARDWARE ONLINE" : "HARDWARE OFFLINE"}
+            {telemetry.mode === "REAL" ? "HARDWARE ONLINE" : "DEMO SIMULATION ACTIVE"}
           </div>
         </div>
 
@@ -77,24 +77,24 @@ export const MissionControl: React.FC = () => {
         <div className="col-span-5 flex flex-col justify-between h-full">
           <div>
             <h1 className="font-display font-black text-[28px] leading-[0.98] tracking-tight text-[#111111]">
-              {isConnected ? (
+              {telemetry.mode === "REAL" ? (
                 <>
                   SYSTEM<br />OPERATIONAL.
                 </>
               ) : (
                 <>
-                  SYSTEM<br />OFFLINE.
+                  DEMO MODE<br />ACTIVE.
                 </>
               )}
             </h1>
             <div className="mt-2.5 text-[9.5px] leading-[1.4] tracking-wider text-[#333333] font-semibold">
               <div>BLACKSUN IS ON WATCH.</div>
-              <div>{isConnected ? "DETECTING THREATS." : "WAITING FOR ESP32 CORE."}</div>
-              <div>PROTECTING WHAT MATTERS.</div>
+              <div>{telemetry.mode === "REAL" ? "HARDWARE PROTECTING WHAT MATTERS." : "SIMULATING DETERMINISTIC RESPONSE."}</div>
+              <div>AUTONOMOUS | RESILIENT | CONTINUOUS.</div>
             </div>
           </div>
           {/* Accent Bar */}
-          <div className={`mt-3.5 h-[3.5px] w-[75px] ${isConnected ? "bg-[#19D3C2]" : "bg-[#FFA133]"}`} />
+          <div className={`mt-3.5 h-[3.5px] w-[75px] ${telemetry.mode === "REAL" ? "bg-[#19D3C2]" : "bg-[#FFA133]"}`} />
         </div>
 
         {/* Middle Col: CRISIS LEVEL */}
@@ -105,9 +105,7 @@ export const MissionControl: React.FC = () => {
 
           <div
             className={`my-2 w-full max-w-[210px] px-4 py-2 flex items-center justify-center transition-all ${
-              !isConnected
-                ? "bg-[#9A9890] text-white shadow-sm"
-                : isCritical
+              isCritical
                 ? "bg-[#FF4848] text-white shadow-sm"
                 : isWarning
                 ? "bg-[#FFA133] text-black shadow-sm"
@@ -115,7 +113,7 @@ export const MissionControl: React.FC = () => {
             }`}
           >
             <span className="font-display font-black text-[26px] tracking-wider leading-none">
-              {!isConnected ? "OFFLINE" : telemetry.crisisLevel}
+              {telemetry.crisisLevel}
             </span>
           </div>
 
