@@ -24,8 +24,17 @@ export const MissionControl: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const formatUptime = (sec: number | null) => {
+    if (sec === null || isNaN(sec)) return "--:--:--";
+    const h = String(Math.floor(sec / 3600)).padStart(2, "0");
+    const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+    const s = String(sec % 60).padStart(2, "0");
+    return `${h}:${m}:${s}`;
+  };
+
   const isWarning = telemetry.crisisLevel === "WARNING";
   const isCritical = telemetry.crisisLevel === "CRITICAL";
+  const isConnected = telemetry.isConnected;
 
   return (
     <div className="h-full flex flex-col justify-between p-4 bg-[#F4F3ED] select-none font-mono-tech">
@@ -37,11 +46,11 @@ export const MissionControl: React.FC = () => {
               MISSION CONTROL
             </h2>
             <span className="text-[9.5px] tracking-widest text-[#666661] uppercase font-semibold">
-              REAL-TIME MONITORING • AUTONOMOUS RESPONSE • NO CLOUD
+              REAL-TIME MONITORING • AUTONOMOUS RESPONSE • ZERO CLOUD
             </span>
           </div>
           <div className="text-[9px] tracking-widest text-[#8A887D] font-semibold mt-0.5 uppercase">
-            SYSTEM
+            {isConnected ? "HARDWARE ONLINE" : "HARDWARE OFFLINE"}
           </div>
         </div>
 
@@ -57,30 +66,38 @@ export const MissionControl: React.FC = () => {
           </div>
           <div>
             <span className="text-[#8A887D] block">UPTIME</span>
-            <span className="font-bold text-[#111111]">02:14:36</span>
+            <span className="font-bold text-[#111111]">{formatUptime(telemetry.uptimeSeconds)}</span>
           </div>
         </div>
       </div>
 
       {/* Main 3-Column Content */}
       <div className="grid grid-cols-12 gap-4 pt-3 items-start flex-1">
-        {/* Left Col: SYSTEM OPERATIONAL */}
+        {/* Left Col: SYSTEM OPERATIONAL / OFFLINE */}
         <div className="col-span-5 flex flex-col justify-between h-full">
           <div>
             <h1 className="font-display font-black text-[28px] leading-[0.98] tracking-tight text-[#111111]">
-              SYSTEM<br />OPERATIONAL.
+              {isConnected ? (
+                <>
+                  SYSTEM<br />OPERATIONAL.
+                </>
+              ) : (
+                <>
+                  SYSTEM<br />OFFLINE.
+                </>
+              )}
             </h1>
             <div className="mt-2.5 text-[9.5px] leading-[1.4] tracking-wider text-[#333333] font-semibold">
               <div>BLACKSUN IS ON WATCH.</div>
-              <div>DETECTING THREATS.</div>
+              <div>{isConnected ? "DETECTING THREATS." : "WAITING FOR ESP32 CORE."}</div>
               <div>PROTECTING WHAT MATTERS.</div>
             </div>
           </div>
-          {/* Teal Accent Bar */}
-          <div className="mt-3.5 h-[3.5px] w-[75px] bg-[#19D3C2]" />
+          {/* Accent Bar */}
+          <div className={`mt-3.5 h-[3.5px] w-[75px] ${isConnected ? "bg-[#19D3C2]" : "bg-[#FFA133]"}`} />
         </div>
 
-        {/* Middle Col: CRISIS LEVEL (Solid Amber/Orange in reference!) */}
+        {/* Middle Col: CRISIS LEVEL */}
         <div className="col-span-4 flex flex-col items-center justify-start text-center">
           <div className="text-[10px] tracking-[0.18em] text-[#666661] font-semibold uppercase">
             CRISIS LEVEL
@@ -88,7 +105,9 @@ export const MissionControl: React.FC = () => {
 
           <div
             className={`my-2 w-full max-w-[210px] px-4 py-2 flex items-center justify-center transition-all ${
-              isCritical
+              !isConnected
+                ? "bg-[#9A9890] text-white shadow-sm"
+                : isCritical
                 ? "bg-[#FF4848] text-white shadow-sm"
                 : isWarning
                 ? "bg-[#FFA133] text-black shadow-sm"
@@ -96,7 +115,7 @@ export const MissionControl: React.FC = () => {
             }`}
           >
             <span className="font-display font-black text-[26px] tracking-wider leading-none">
-              {telemetry.crisisLevel}
+              {!isConnected ? "OFFLINE" : telemetry.crisisLevel}
             </span>
           </div>
 

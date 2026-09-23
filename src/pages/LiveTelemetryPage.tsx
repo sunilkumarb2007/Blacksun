@@ -7,92 +7,137 @@ export const LiveTelemetryPage: React.FC = () => {
   const { telemetry, settings } = useTelemetry();
   const [timeframe, setTimeframe] = useState<Timeframe>("live");
 
+  const isConnected = telemetry.isConnected;
+
   const telemetryChannels = [
     {
       id: "temp",
       name: "TEMPERATURE (DS18B20)",
-      val: telemetry.temperature.toFixed(1),
+      val: isConnected && telemetry.temperature !== null ? telemetry.temperature.toFixed(1) : "--",
       unit: "°C",
-      min: 34.1,
-      max: 52.8,
-      avg: 38.2,
-      warnThreshold: `${settings.tempWarningThreshold}°C`,
-      critThreshold: `${settings.tempCriticalThreshold}°C`,
+      warnThreshold: `${settings.tempWarningThreshold.toFixed(1)}°C (28°C)`,
+      critThreshold: `${settings.tempCriticalThreshold.toFixed(1)}°C (35°C)`,
       history: telemetry.tempHistory,
       color: "#FF4848",
-      status: telemetry.tempStatus,
+      status: !isConnected ? "OFFLINE" : (telemetry.temperature ?? 0) > 35 ? "CRITICAL" : (telemetry.temperature ?? 0) >= 28 ? "WARNING" : "NORMAL",
     },
     {
-      id: "volt_curr",
-      name: "BUS POWER & VOLTAGE (INA219)",
-      val: `${telemetry.voltage.toFixed(1)} V / ${telemetry.current.toFixed(1)} A`,
-      unit: `(${telemetry.power.toFixed(1)} W)`,
-      min: 22.4,
-      max: 44.8,
-      avg: 25.1,
+      id: "volt",
+      name: "BUS VOLTAGE (INA219)",
+      val: isConnected && telemetry.voltage !== null ? telemetry.voltage.toFixed(1) : "--",
+      unit: "V",
+      warnThreshold: "11.2 V",
+      critThreshold: "10.5 V",
+      history: telemetry.voltageHistory,
+      color: "#456557",
+      status: !isConnected ? "OFFLINE" : telemetry.powerCondition,
+    },
+    {
+      id: "power_curr",
+      name: "BUS POWER & CURRENT (INA219)",
+      val: isConnected && telemetry.power !== null && telemetry.current !== null
+        ? `${telemetry.power.toFixed(1)} W / ${telemetry.current.toFixed(2)} A`
+        : "--",
+      unit: "INA219",
       warnThreshold: "26.0 W",
       critThreshold: "38.0 W",
       history: telemetry.powerHistory,
-      color: "#456557",
-      status: telemetry.powerCondition,
-    },
-    {
-      id: "mot_curr",
-      name: "MOTOR CURRENT (ACS712)",
-      val: telemetry.motorCurrent.toFixed(2),
-      unit: "A",
-      min: 0.78,
-      max: 3.24,
-      avg: 0.88,
-      warnThreshold: `${settings.currentWarningThreshold} A`,
-      critThreshold: `${settings.currentCriticalThreshold} A`,
-      history: telemetry.motorCurrentHistory,
       color: "#0284C7",
-      status: telemetry.motorCurrentStatus,
+      status: !isConnected ? "OFFLINE" : (telemetry.power ?? 0) > 38 ? "CRITICAL" : "NORMAL",
     },
     {
       id: "vib",
       name: "VIBRATION SPECTRUM (MPU6050)",
-      val: telemetry.vibration.toFixed(2),
+      val: isConnected && telemetry.vibration !== null ? telemetry.vibration.toFixed(2) : "--",
       unit: "g",
-      min: 0.02,
-      max: 0.44,
-      avg: 0.08,
-      warnThreshold: `${settings.vibrationWarningThreshold} g`,
-      critThreshold: `${settings.vibrationCriticalThreshold} g`,
+      warnThreshold: `${settings.vibrationWarningThreshold.toFixed(1)} g (3.0g)`,
+      critThreshold: `${settings.vibrationCriticalThreshold.toFixed(1)} g (5.0g)`,
       history: telemetry.vibrationHistory,
       color: "#FFA133",
-      status: telemetry.vibrationStatus,
+      status: !isConnected ? "OFFLINE" : (telemetry.vibration ?? 0) >= 3.0 ? "ALERT" : "NORMAL",
     },
     {
-      id: "load",
-      name: "SYSTEM & MOTOR LOAD",
-      val: `${telemetry.motorLoad}`,
-      unit: "%",
-      min: 40,
-      max: 98,
-      avg: 74,
-      warnThreshold: "80 %",
-      critThreshold: "90 %",
-      history: [68, 70, 72, 75, 78, 80, 81, telemetry.motorLoad],
+      id: "motor_pwm",
+      name: "MOTOR PWM & SPEED (INA219 / BTS7960)",
+      val: isConnected ? (telemetry.motorOn ? `ON (${telemetry.motorSpeed ?? 180})` : "OFF") : "--",
+      unit: "PWM 0-255",
+      warnThreshold: "220 PWM",
+      critThreshold: "255 PWM",
+      history: telemetry.motorCurrentHistory,
       color: "#8B5CF6",
-      status: telemetry.motorLoad > 85 ? "HIGH" : "NORMAL",
+      status: !isConnected ? "OFFLINE" : telemetry.motorOn ? "RUNNING" : "HALTED",
     },
     {
-      id: "rf",
-      name: "COMMUNICATION RSSI / LATENCY",
-      val: `${telemetry.rssi} dBm / ${telemetry.latency} ms`,
-      unit: telemetry.rfStatus,
-      min: -75,
-      max: -65,
-      avg: -68,
-      warnThreshold: "-85 dBm",
-      critThreshold: "-92 dBm",
-      history: [-68, -69, -68, -67, -68, -67, -68, telemetry.rssi],
+      id: "comm",
+      name: "COMMUNICATION LINK (ESP-NOW)",
+      val: isConnected ? "ESP-NOW" : "LINK LOST",
+      unit: isConnected ? "CONNECTED" : "OFFLINE",
+      warnThreshold: "TIMEOUT >200ms",
+      critThreshold: "CARRIER DROP",
+      history: isConnected ? [1, 1, 1, 1, 1, 1, 1, 1] : [0, 0, 0, 0],
       color: "#19D3C2",
-      status: telemetry.rfStatus,
+      status: isConnected ? "CONNECTED" : "LOST",
     },
   ];
+
+  const renderWaveform = (data: number[], color: string) => {
+    const width = 300;
+    const height = 80;
+
+    if (!data || data.length < 2) {
+      return (
+        <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${width} ${height}`}>
+          <line x1="0" y1="20" x2="300" y2="20" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
+          <line x1="0" y1="40" x2="300" y2="40" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
+          <line x1="0" y1="60" x2="300" y2="60" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
+          <line x1="0" y1="40" x2="300" y2="40" stroke={color} strokeWidth="1" strokeDasharray="4 4" opacity="0.4" />
+        </svg>
+      );
+    }
+
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const range = max - min || 1;
+
+    const points = data
+      .map((val, idx) => {
+        const x = (idx / (data.length - 1)) * width;
+        const y = 68 - ((val - min) / range) * 52;
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+    const lastVal = data[data.length - 1];
+    const lastY = 68 - ((lastVal - min) / range) * 52;
+
+    return (
+      <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${width} ${height}`}>
+        {/* Reference Grid lines */}
+        <line x1="0" y1="20" x2="300" y2="20" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
+        <line x1="0" y1="40" x2="300" y2="40" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
+        <line x1="0" y1="60" x2="300" y2="60" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
+
+        {/* Real Dynamic Telemetry Polyline */}
+        <polyline
+          fill="none"
+          stroke={color}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={points}
+        />
+        <circle cx={width} cy={lastY} r="3.5" fill={color} />
+      </svg>
+    );
+  };
+
+  const getStats = (data: number[]) => {
+    if (!data || data.length === 0) return { min: "--", max: "--", avg: "--" };
+    const min = Math.min(...data).toFixed(1);
+    const max = Math.max(...data).toFixed(1);
+    const avg = (data.reduce((a, b) => a + b, 0) / data.length).toFixed(1);
+    return { min, max, avg };
+  };
 
   return (
     <div className="flex-1 p-5 overflow-y-auto space-y-4 font-mono-tech select-none bg-[#E8E7DF]">
@@ -106,7 +151,7 @@ export const LiveTelemetryPage: React.FC = () => {
             </h1>
           </div>
           <p className="text-[11px] text-[#5A686D]">
-            HIGH-PRECISION SENSOR CHANNELS • CONFIGURABLE SAFETY BOUNDARIES
+            REAL HARDWARE SENSOR STREAMS • ZERO CLOUD WEBSOCKET TELEMETRY
           </p>
         </div>
 
@@ -130,78 +175,68 @@ export const LiveTelemetryPage: React.FC = () => {
 
       {/* Grid of 6 Real-time Instrumentation Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {telemetryChannels.map((ch) => (
-          <div
-            key={ch.id}
-            className="border border-[#B5B3A7] bg-[#F4F3ED] p-4 flex flex-col justify-between"
-          >
-            {/* Channel Header */}
-            <div className="flex items-center justify-between border-b border-[#B5B3A7] pb-2 mb-3">
-              <div>
-                <div className="font-bold text-[12px] text-[#182226] tracking-wide">{ch.name}</div>
-                <div className="text-[9.5px] text-[#5A686D]">
-                  WARN: <span className="text-[#FFA133] font-semibold">{ch.warnThreshold}</span> | CRIT:{" "}
-                  <span className="text-[#FF4848] font-semibold">{ch.critThreshold}</span>
+        {telemetryChannels.map((ch) => {
+          const stats = getStats(ch.history);
+          return (
+            <div
+              key={ch.id}
+              className="border border-[#B5B3A7] bg-[#F4F3ED] p-4 flex flex-col justify-between"
+            >
+              {/* Channel Header */}
+              <div className="flex items-center justify-between border-b border-[#B5B3A7] pb-2 mb-3">
+                <div>
+                  <div className="font-bold text-[12px] text-[#182226] tracking-wide">{ch.name}</div>
+                  <div className="text-[9.5px] text-[#5A686D]">
+                    WARN: <span className="text-[#FFA133] font-semibold">{ch.warnThreshold}</span> | CRIT:{" "}
+                    <span className="text-[#FF4848] font-semibold">{ch.critThreshold}</span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="font-display font-extrabold text-[22px] text-[#182226] tracking-tight">
+                    {ch.val}
+                  </span>{" "}
+                  <span className="text-[11px] text-[#456557] font-bold">{ch.unit}</span>
                 </div>
               </div>
-              <div className="text-right">
-                <span className="font-display font-extrabold text-[22px] text-[#182226] tracking-tight">
-                  {ch.val}
-                </span>{" "}
-                <span className="text-[11px] text-[#456557] font-bold">{ch.unit}</span>
+
+              {/* Real SVG Waveform Chart */}
+              <div className="h-28 w-full border border-[#B5B3A7] bg-[#FFFFFF] p-2 relative overflow-hidden my-2">
+                {/* Threshold Lines */}
+                <div className="absolute inset-x-0 top-6 border-b border-dashed border-[#FF4848]/60" />
+                <div className="absolute inset-x-0 top-12 border-b border-dashed border-[#FFA133]/60" />
+
+                {renderWaveform(ch.history, ch.color)}
+
+                <div className="absolute bottom-1 right-2 text-[8.5px] text-[#5A686D]">
+                  SAMPLES: {ch.history.length} | {timeframe.toUpperCase()}
+                </div>
+              </div>
+
+              {/* Min / Max / Avg Metrics Footer */}
+              <div className="flex items-center justify-between text-[10px] text-[#5A686D] pt-2 border-t border-[#B5B3A7]">
+                <div>MIN: <span className="text-[#182226] font-bold">{stats.min}</span></div>
+                <div>MAX: <span className="text-[#182226] font-bold">{stats.max}</span></div>
+                <div>AVG: <span className="text-[#182226] font-bold">{stats.avg}</span></div>
+                <div className="flex items-center gap-1.5">
+                  STATUS:{" "}
+                  <span
+                    className={`font-bold px-1.5 py-0.5 text-[9px] ${
+                      ch.status === "CRITICAL" || ch.status === "ALERT"
+                        ? "bg-[#FF4848] text-white"
+                        : ch.status === "WARNING"
+                        ? "bg-[#FFA133] text-[#111111]"
+                        : ch.status === "OFFLINE"
+                        ? "bg-[#9A9890] text-white"
+                        : "bg-[#456557] text-white"
+                    }`}
+                  >
+                    {ch.status}
+                  </span>
+                </div>
               </div>
             </div>
-
-            {/* SVG Waveform Chart */}
-            <div className="h-28 w-full border border-[#B5B3A7] bg-[#FFFFFF] p-2 relative overflow-hidden my-2">
-              {/* Threshold Lines */}
-              <div className="absolute inset-x-0 top-6 border-b border-dashed border-[#FF4848]/60" />
-              <div className="absolute inset-x-0 top-12 border-b border-dashed border-[#FFA133]/60" />
-
-              <svg className="w-full h-full overflow-visible" viewBox="0 0 300 80">
-                {/* Reference Grid lines */}
-                <line x1="0" y1="20" x2="300" y2="20" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
-                <line x1="0" y1="40" x2="300" y2="40" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
-                <line x1="0" y1="60" x2="300" y2="60" stroke="#E2DFD2" strokeWidth="0.8" strokeDasharray="3 3" />
-
-                {/* Simulated Curve */}
-                <path
-                  d={`M 0 50 Q 50 ${40 + Math.sin(Date.now() / 2000) * 10} 100 45 T 200 ${
-                    35 + Math.cos(Date.now() / 2000) * 12
-                  } T 300 40`}
-                  fill="none"
-                  stroke={ch.color}
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-                <circle cx="300" cy="40" r="3.5" fill={ch.color} />
-              </svg>
-
-              <div className="absolute bottom-1 right-2 text-[8.5px] text-[#5A686D]">
-                WINDOW: {timeframe.toUpperCase()}
-              </div>
-            </div>
-
-            {/* Min / Max / Avg Metrics Footer */}
-            <div className="flex items-center justify-between text-[10px] text-[#5A686D] pt-2 border-t border-[#B5B3A7]">
-              <div>MIN: <span className="text-[#182226] font-bold">{ch.min}</span></div>
-              <div>MAX: <span className="text-[#182226] font-bold">{ch.max}</span></div>
-              <div>AVG: <span className="text-[#182226] font-bold">{ch.avg}</span></div>
-              <div className="flex items-center gap-1.5">
-                STATUS:{" "}
-                <span
-                  className={`font-bold px-1.5 py-0.5 text-[9px] ${
-                    ch.status === "CRITICAL" || ch.status === "HIGH" || ch.status === "ALERT"
-                      ? "bg-[#FF4848] text-white"
-                      : "bg-[#456557] text-white"
-                  }`}
-                >
-                  {ch.status}
-                </span>
-              </div>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

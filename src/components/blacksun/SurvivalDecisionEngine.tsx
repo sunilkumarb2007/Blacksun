@@ -3,12 +3,16 @@ import { useTelemetry } from "../../context/TelemetryContext";
 
 export const SurvivalDecisionEngine: React.FC = () => {
   const { telemetry, navigatePage } = useTelemetry();
+  const isConnected = telemetry.isConnected;
 
-  const isTempHigh = telemetry.tempStatus !== "NORMAL";
+  const isTempCritical = telemetry.tempStatus === "CRITICAL";
+  const isTempWarning = telemetry.tempStatus === "HIGH";
+  const isTempHigh = isTempCritical || isTempWarning;
+
   const isVibAlert = telemetry.vibrationStatus !== "NORMAL";
-  const isPowerNormal = telemetry.powerCondition === "NORMAL";
-  const isMotorCurrentNormal = telemetry.motorCurrentStatus === "NORMAL";
-  const isRfConnected = telemetry.rfLinkStatus === "CONNECTED";
+  const isPowerNormal = isConnected && telemetry.powerCondition === "NORMAL";
+  const isMotorRunning = isConnected && telemetry.motorOn;
+  const isRfConnected = isConnected && telemetry.rfLinkStatus === "CONNECTED";
 
   return (
     <div className="h-full flex flex-col justify-between p-4 bg-[#F4F3ED] select-none font-mono-tech">
@@ -18,7 +22,7 @@ export const SurvivalDecisionEngine: React.FC = () => {
           SURVIVAL DECISION ENGINE
         </h2>
         <div className="text-[9px] tracking-widest text-[#666661] font-semibold mt-0.5 uppercase">
-          MULTI-SENSOR ANALYSIS
+          MULTI-SENSOR HARDWARE ANALYSIS
         </div>
       </div>
 
@@ -29,15 +33,39 @@ export const SurvivalDecisionEngine: React.FC = () => {
           {/* TEMPERATURE */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isTempHigh ? "bg-[#FF4848]" : "bg-[#3D6E5C]"}`} />
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  !isConnected
+                    ? "bg-[#9A9890]"
+                    : isTempCritical
+                    ? "bg-[#FF4848]"
+                    : isTempWarning
+                    ? "bg-[#FFA133]"
+                    : "bg-[#3D6E5C]"
+                }`}
+              />
               <span className="font-bold text-[#111111]">TEMPERATURE</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`font-bold ${isTempHigh ? "text-[#FF4848]" : "text-[#3D6E5C]"}`}>
-                {telemetry.tempStatus}
+              <span
+                className={`font-bold ${
+                  !isConnected
+                    ? "text-[#78766B]"
+                    : isTempCritical
+                    ? "text-[#FF4848]"
+                    : isTempWarning
+                    ? "text-[#FF8A24]"
+                    : "text-[#3D6E5C]"
+                }`}
+              >
+                {!isConnected ? "--" : isTempCritical ? "CRITICAL" : isTempWarning ? "WARNING" : "NORMAL"}
               </span>
-              <span className={`font-bold w-3 text-center ${isTempHigh ? "text-[#FF4848]" : "text-[#3D6E5C]"}`}>
-                {isTempHigh ? "!" : "✓"}
+              <span
+                className={`font-bold w-3 text-center ${
+                  !isConnected ? "text-[#78766B]" : isTempHigh ? "text-[#FF4848]" : "text-[#3D6E5C]"
+                }`}
+              >
+                {!isConnected ? "--" : isTempHigh ? "!" : "✓"}
               </span>
             </div>
           </div>
@@ -45,31 +73,39 @@ export const SurvivalDecisionEngine: React.FC = () => {
           {/* POWER CONDITION */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isPowerNormal ? "bg-[#3D6E5C]" : "bg-[#FF4848]"}`} />
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  !isConnected ? "bg-[#9A9890]" : isPowerNormal ? "bg-[#3D6E5C]" : "bg-[#FF4848]"
+                }`}
+              />
               <span className="font-bold text-[#111111]">POWER CONDITION</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`font-bold ${isPowerNormal ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
-                {telemetry.powerCondition}
+              <span className={`font-bold ${!isConnected ? "text-[#78766B]" : isPowerNormal ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
+                {!isConnected ? "--" : isPowerNormal ? "NORMAL" : "ALERT"}
               </span>
-              <span className={`font-bold w-3 text-center ${isPowerNormal ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
-                {isPowerNormal ? "✓" : "!"}
+              <span className={`font-bold w-3 text-center ${!isConnected ? "text-[#78766B]" : isPowerNormal ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
+                {!isConnected ? "--" : isPowerNormal ? "✓" : "!"}
               </span>
             </div>
           </div>
 
-          {/* MOTOR CURRENT */}
+          {/* MOTOR STATE */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isMotorCurrentNormal ? "bg-[#3D6E5C]" : "bg-[#FF4848]"}`} />
-              <span className="font-bold text-[#111111]">MOTOR CURRENT</span>
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  !isConnected ? "bg-[#9A9890]" : isMotorRunning ? "bg-[#3D6E5C]" : "bg-[#FF4848]"
+                }`}
+              />
+              <span className="font-bold text-[#111111]">MOTOR</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`font-bold ${isMotorCurrentNormal ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
-                {telemetry.motorCurrentStatus}
+              <span className={`font-bold ${!isConnected ? "text-[#78766B]" : isMotorRunning ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
+                {!isConnected ? "--" : isMotorRunning ? "RUNNING" : "OFF"}
               </span>
-              <span className={`font-bold w-3 text-center ${isMotorCurrentNormal ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
-                {isMotorCurrentNormal ? "✓" : "!"}
+              <span className={`font-bold w-3 text-center ${!isConnected ? "text-[#78766B]" : isMotorRunning ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
+                {!isConnected ? "--" : isMotorRunning ? "✓" : "!"}
               </span>
             </div>
           </div>
@@ -77,28 +113,36 @@ export const SurvivalDecisionEngine: React.FC = () => {
           {/* VIBRATION (MPU6050) */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isVibAlert ? "bg-[#FFA133]" : "bg-[#3D6E5C]"}`} />
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  !isConnected ? "bg-[#9A9890]" : isVibAlert ? "bg-[#FFA133]" : "bg-[#3D6E5C]"
+                }`}
+              />
               <span className="font-bold text-[#111111]">VIBRATION (MPU6050)</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`font-bold ${isVibAlert ? "text-[#FF8A24]" : "text-[#3D6E5C]"}`}>
-                {telemetry.vibrationStatus}
+              <span className={`font-bold ${!isConnected ? "text-[#78766B]" : isVibAlert ? "text-[#FF8A24]" : "text-[#3D6E5C]"}`}>
+                {!isConnected ? "--" : isVibAlert ? "ALERT" : "NORMAL"}
               </span>
-              <span className={`font-bold w-3 text-center ${isVibAlert ? "text-[#FF8A24]" : "text-[#3D6E5C]"}`}>
-                {isVibAlert ? "!" : "✓"}
+              <span className={`font-bold w-3 text-center ${!isConnected ? "text-[#78766B]" : isVibAlert ? "text-[#FF8A24]" : "text-[#3D6E5C]"}`}>
+                {!isConnected ? "--" : isVibAlert ? "!" : "✓"}
               </span>
             </div>
           </div>
 
-          {/* RF LINK */}
+          {/* COMMUNICATION (ESP-NOW) */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className={`w-2.5 h-2.5 rounded-full ${isRfConnected ? "bg-[#2C5E4E]" : "bg-[#FF4848]"}`} />
-              <span className="font-bold text-[#111111]">RF LINK</span>
+              <span
+                className={`w-2.5 h-2.5 rounded-full ${
+                  isRfConnected ? "bg-[#3D6E5C]" : "bg-[#FF4848]"
+                }`}
+              />
+              <span className="font-bold text-[#111111]">COMMUNICATION</span>
             </div>
             <div className="flex items-center gap-2">
               <span className={`font-bold ${isRfConnected ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
-                {telemetry.rfLinkStatus}
+                {isRfConnected ? "CONNECTED" : "LOST"}
               </span>
               <span className={`font-bold w-3 text-center ${isRfConnected ? "text-[#3D6E5C]" : "text-[#FF4848]"}`}>
                 {isRfConnected ? "✓" : "!"}
@@ -107,45 +151,49 @@ export const SurvivalDecisionEngine: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Decision Box */}
-        <div
-          onClick={() => navigatePage("04")}
-          className="col-span-5 border border-[#B5B3A7] bg-[#EAE9E1] p-3 flex flex-col justify-between cursor-pointer group hover:border-[#111111] transition-colors"
-          title="Click to view Decision Tree in Survival Engine"
-        >
+        {/* Right Col: DECISION BOX */}
+        <div className="col-span-5 flex flex-col justify-between pl-3 border-l border-[#B5B3A7]">
           <div>
-            <div className="text-[9.5px] tracking-widest text-[#666661] font-semibold uppercase">
+            <div className="text-[9.5px] tracking-widest text-[#666661] uppercase font-semibold">
               DECISION
             </div>
-            <div className="font-display font-black text-[16px] leading-snug tracking-tight text-[#111111] my-1 uppercase">
-              {telemetry.decision}
+
+            {/* Recessed Decision Box with Hazard Stripes */}
+            <div className="hazard-stripes border border-[#B5B3A7] p-2 mt-1 mb-2">
+              <div className="font-display font-black text-[13px] leading-tight text-[#111111] uppercase tracking-wide">
+                {telemetry.decision}
+              </div>
+            </div>
+
+            {/* Confidence Bar */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[9px] font-bold text-[#555555]">
+                <span>CONFIDENCE</span>
+                <span>{isConnected ? `${telemetry.confidence || (isTempHigh ? 92 : 98)}%` : "--"}</span>
+              </div>
+              <div className="w-full h-1.5 bg-[#DDDCD3] border border-[#B5B3A7]">
+                <div
+                  className="h-full bg-[#364E46] transition-all duration-300"
+                  style={{ width: `${isConnected ? telemetry.confidence || (isTempHigh ? 92 : 98) : 0}%` }}
+                />
+              </div>
             </div>
           </div>
 
-          <div>
-            <div className="text-[10px] font-bold tracking-wider text-[#111111] mb-1">
-              CONFIDENCE: {telemetry.confidence}%
-            </div>
-            {/* Sage Green Confidence Bar */}
-            <div className="h-3 border border-[#B5B3A7] bg-[#DDDCD5] p-[1px] relative overflow-hidden">
-              <div
-                className="h-full bg-[#4E7A68] transition-all duration-300"
-                style={{ width: `${telemetry.confidence}%` }}
-              />
-            </div>
-
-            {/* Bottom Micro-Chain */}
-            <div className="mt-2 text-[7.5px] tracking-wider text-[#666661] flex justify-between uppercase font-bold">
-              <span>DETECT</span>
-              <span>→</span>
-              <span>SENSE</span>
-              <span>→</span>
-              <span>THINK</span>
-              <span>→</span>
-              <span>ADAPT</span>
-              <span>→</span>
-              <span className="text-[#364E46]">SURVIVE</span>
-            </div>
+          {/* Micro-chain Link to Page 04 */}
+          <div
+            onClick={() => navigatePage("04")}
+            className="cursor-pointer text-[8px] tracking-wider text-[#78766B] font-semibold flex items-center gap-1 hover:text-[#111111] transition-colors"
+          >
+            <span>DETECT</span>
+            <span>→</span>
+            <span>SENSE</span>
+            <span>→</span>
+            <span>THINK</span>
+            <span>→</span>
+            <span>ADAPT</span>
+            <span>→</span>
+            <span className="font-bold text-[#364E46]">SURVIVE</span>
           </div>
         </div>
       </div>

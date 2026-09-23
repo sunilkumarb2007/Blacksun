@@ -3,6 +3,9 @@ import { useTelemetry } from "../../context/TelemetryContext";
 
 export const MotorHealth: React.FC = () => {
   const { telemetry, navigatePage } = useTelemetry();
+  const isConnected = telemetry.isConnected;
+
+  const isVibAlert = isConnected && telemetry.vibration !== null && telemetry.vibration >= 3.0;
 
   return (
     <div className="h-full flex flex-col justify-between p-4 bg-[#F4F3ED] select-none font-mono-tech">
@@ -12,8 +15,12 @@ export const MotorHealth: React.FC = () => {
           MOTOR HEALTH
         </h2>
         <div className="flex items-center gap-1.5 text-[10px] tracking-wider font-bold text-[#111111]">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#FF4848] animate-beacon" />
-          <span>LIVE</span>
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${
+              isConnected ? "bg-[#FF4848] animate-beacon" : "bg-[#9A9890]"
+            }`}
+          />
+          <span>{isConnected ? "LIVE" : "OFFLINE"}</span>
         </div>
       </div>
 
@@ -70,49 +77,61 @@ export const MotorHealth: React.FC = () => {
         <div className="col-span-6 space-y-1 text-[11.5px] leading-tight pl-2 border-l border-[#B5B3A7]">
           <div className="flex items-center justify-between">
             <span className="text-[#666661]">RPM</span>
-            <span className="text-[#111111] font-bold text-[13px]">{telemetry.rpm}</span>
+            <span className="text-[#111111] font-bold text-[13px]">--</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[#666661]">Motor Current</span>
-            <span className="text-[#111111] font-bold text-[13px]">{telemetry.motorHealthCurrent.toFixed(2)} A</span>
+            <span className="text-[#666661]">CURRENT (INA219)</span>
+            <span className="text-[#111111] font-bold text-[13px]">
+              {isConnected && telemetry.current !== null ? `${telemetry.current.toFixed(2)} A` : "--"}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[#666661]">Temperature</span>
-            <span className="text-[#111111] font-bold text-[13px]">{telemetry.temperature.toFixed(1)} °C</span>
+            <span className="text-[#111111] font-bold text-[13px]">
+              {isConnected && telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C` : "--"}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[#666661]">Vibration</span>
             <span
               className={`font-bold text-[13px] ${
-                telemetry.vibrationAlert === "HIGH" || telemetry.vibrationAlert === "CRITICAL"
-                  ? "text-[#FF4848]"
-                  : "text-[#2E7D32]"
+                isVibAlert ? "text-[#FF4848]" : "text-[#2E7D32]"
               }`}
             >
-              {telemetry.vibrationAlert}
+              {isConnected && telemetry.vibration !== null
+                ? telemetry.vibration >= 3.0
+                  ? "VIBRATION ALERT"
+                  : "NORMAL"
+                : "--"}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[#666661]">Motor Load</span>
-            <span className="text-[#111111] font-bold text-[13px]">{telemetry.motorLoad} %</span>
+            <span className="text-[#666661]">Motor State</span>
+            <span className="text-[#111111] font-bold text-[13px]">
+              {isConnected
+                ? telemetry.motorOn
+                  ? `ON (${telemetry.motorSpeed ?? 180} PWM)`
+                  : "OFF"
+                : "--"}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* FAILURE RISK Horizontal Bar */}
-      <div className="pt-2 border-t border-[#B5B3A7] flex items-center gap-3">
-        <span className="text-[10px] font-bold tracking-wider text-[#333333] whitespace-nowrap uppercase">
-          FAILURE RISK
-        </span>
-        <div className="flex-1 h-3.5 border border-[#B5B3A7] bg-[#DDDCD5] p-[1px] relative overflow-hidden">
+      {/* Bottom Failure Risk Bar */}
+      <div className="pt-2 border-t border-[#B5B3A7]">
+        <div className="flex items-center justify-between mb-1 text-[10px] font-semibold text-[#666661]">
+          <span>FAILURE RISK</span>
+          <span className="text-[#FF4848] font-bold">
+            {isConnected ? `${telemetry.failureRisk} / 100` : "--"}
+          </span>
+        </div>
+        <div className="w-full h-2 bg-[#DDDCD3] border border-[#B5B3A7] overflow-hidden p-[0.5px]">
           <div
             className="h-full bg-[#FF4848] transition-all duration-300"
-            style={{ width: `${telemetry.failureRisk}%` }}
+            style={{ width: `${isConnected ? telemetry.failureRisk : 0}%` }}
           />
         </div>
-        <span className="text-[12px] font-bold text-[#111111] min-w-[34px] text-right">
-          {telemetry.failureRisk} %
-        </span>
       </div>
     </div>
   );

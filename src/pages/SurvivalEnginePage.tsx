@@ -17,7 +17,9 @@ export const SurvivalEnginePage: React.FC = () => {
       label: "2. SENSE",
       desc: "Noise Filtering & Trend Extraction",
       active: true,
-      data: `Gradient: +${telemetry.temperatureRate.toFixed(1)}°C/min | RMS Vib: ${telemetry.vibration.toFixed(2)}g`,
+      data: telemetry.temperatureRate !== null
+        ? `Gradient: +${telemetry.temperatureRate.toFixed(1)}°C/min | RMS Vib: ${(telemetry.vibration ?? 0).toFixed(2)}g`
+        : "Awaiting real hardware sensor stream (ws://192.168.4.1:81)",
     },
     {
       id: "THINK",
@@ -108,16 +110,16 @@ export const SurvivalEnginePage: React.FC = () => {
             <span className="text-[#182226] font-bold">1. RAW SENSOR INPUTS</span>
             <div className="flex flex-wrap gap-2 text-[10.5px]">
               <span className="px-2 py-0.5 bg-[#E8E7DF] text-[#182226] border border-[#B5B3A7] font-semibold">
-                Temp: {telemetry.temperature.toFixed(1)}°C
+                Temp: {telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)}°C` : "--"}
               </span>
               <span className="px-2 py-0.5 bg-[#E8E7DF] text-[#182226] border border-[#B5B3A7] font-semibold">
-                Vib: {telemetry.vibration.toFixed(2)}g
+                Vib: {telemetry.vibration !== null ? `${telemetry.vibration.toFixed(2)}g` : "--"}
               </span>
               <span className="px-2 py-0.5 bg-[#E8E7DF] text-[#182226] border border-[#B5B3A7] font-semibold">
-                Curr: {telemetry.motorHealthCurrent.toFixed(2)}A
+                Curr: {telemetry.current !== null ? `${telemetry.current.toFixed(2)}A` : "--"}
               </span>
               <span className="px-2 py-0.5 bg-[#E8E7DF] text-[#182226] border border-[#B5B3A7] font-semibold">
-                RF: {telemetry.rfStatus}
+                Link: {telemetry.rfStatus}
               </span>
             </div>
           </div>

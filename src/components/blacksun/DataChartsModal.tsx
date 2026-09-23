@@ -33,14 +33,16 @@ export const DataChartsModal: React.FC = () => {
           <div className="border border-[#B5B3A7] p-3 bg-[#FFFFFF]">
             <div className="flex justify-between items-center mb-1.5 text-[11px]">
               <span className="font-bold text-[#182226]">1. TEMPERATURE (°C) — DS18B20</span>
-              <span className="font-bold text-[#FF4848]">{telemetry.temperature.toFixed(1)} °C</span>
+              <span className="font-bold text-[#FF4848]">
+                {telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C` : "--"}
+              </span>
             </div>
             <svg className="w-full h-24 bg-[#E8E7DF] border border-[#B5B3A7]" viewBox="0 0 500 100">
               <line x1="0" y1="25" x2="500" y2="25" stroke="#D0CEBF" strokeDasharray="3 3" />
               <line x1="0" y1="50" x2="500" y2="50" stroke="#D0CEBF" strokeDasharray="3 3" />
               <line x1="0" y1="75" x2="500" y2="75" stroke="#D0CEBF" strokeDasharray="3 3" />
               <line x1="0" y1="30" x2="500" y2="30" stroke="#FF4848" strokeWidth="0.8" strokeDasharray="4 2" />
-              <text x="6" y="24" fontSize="8" fill="#FF4848" fontFamily="monospace" fontWeight="bold">THRESHOLD 50°C</text>
+              <text x="6" y="24" fontSize="8" fill="#FF4848" fontFamily="monospace" fontWeight="bold">THRESHOLD 35°C</text>
               <path
                 d="M 0 80 Q 80 75 160 70 T 300 55 T 420 40 L 500 35"
                 fill="none"
@@ -54,10 +56,14 @@ export const DataChartsModal: React.FC = () => {
           {/* Chart 2: Voltage & Current */}
           <div className="border border-[#B5B3A7] p-3 bg-[#FFFFFF]">
             <div className="flex justify-between items-center mb-1.5 text-[11px]">
-              <span className="font-bold text-[#182226]">2. BUS VOLTAGE (V) & MOTOR CURRENT (A) — INA219 / ACS712</span>
+              <span className="font-bold text-[#182226]">2. BUS VOLTAGE (V) & CURRENT (A) — INA219</span>
               <div className="space-x-3">
-                <span className="text-[#19D3C2] font-bold">{telemetry.voltage.toFixed(1)} V</span>
-                <span className="text-[#38BDF8] font-bold">{telemetry.motorHealthCurrent.toFixed(2)} A</span>
+                <span className="text-[#19D3C2] font-bold">
+                  {telemetry.voltage !== null ? `${telemetry.voltage.toFixed(1)} V` : "--"}
+                </span>
+                <span className="text-[#38BDF8] font-bold">
+                  {telemetry.current !== null ? `${telemetry.current.toFixed(2)} A` : "--"}
+                </span>
               </div>
             </div>
             <svg className="w-full h-24 bg-[#E8E7DF] border border-[#B5B3A7]" viewBox="0 0 500 100">
@@ -83,7 +89,9 @@ export const DataChartsModal: React.FC = () => {
           <div className="border border-[#B5B3A7] p-3 bg-[#FFFFFF]">
             <div className="flex justify-between items-center mb-1.5 text-[11px]">
               <span className="font-bold text-[#182226]">3. VIBRATION SPECTRUM (g) — MPU6050</span>
-              <span className="font-bold text-[#FFA133]">{telemetry.vibration.toFixed(2)} g</span>
+              <span className="font-bold text-[#FFA133]">
+                {telemetry.vibration !== null ? `${telemetry.vibration.toFixed(2)} g` : "--"}
+              </span>
             </div>
             <svg className="w-full h-24 bg-[#E8E7DF] border border-[#B5B3A7]" viewBox="0 0 500 100">
               <line x1="0" y1="25" x2="500" y2="25" stroke="#D0CEBF" strokeDasharray="3 3" />
@@ -100,8 +108,8 @@ export const DataChartsModal: React.FC = () => {
         </div>
 
         <div className="mt-4 pt-3 border-t border-[#B5B3A7] flex justify-between items-center text-[10px] text-[#5A686D]">
-          <span>HARDWARE: ESP32 • INA219 • DS18B20 • MPU6050 • ACS712</span>
-          <span>BLACKSUN LOCAL TELEMETRY ENGINE</span>
+          <span>HARDWARE: ESP32 #1 • INA219 • DS18B20 • MPU6050</span>
+          <span>BLACKSUN ESP32 WEBSOCKET TELEMETRY (ws://192.168.4.1:81)</span>
         </div>
       </div>
     </div>

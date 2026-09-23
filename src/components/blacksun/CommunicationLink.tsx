@@ -6,8 +6,10 @@ export const CommunicationLink: React.FC = () => {
   const [packetProgress, setPacketProgress] = useState(0);
   const [isReceiverHit, setIsReceiverHit] = useState(false);
 
+  const isConnected = telemetry.isConnected && telemetry.rfStatus === "CONNECTED";
+
   useEffect(() => {
-    if (telemetry.rfStatus === "LOST") return;
+    if (!isConnected) return;
 
     const interval = setInterval(() => {
       setPacketProgress((prev) => {
@@ -16,14 +18,12 @@ export const CommunicationLink: React.FC = () => {
           setTimeout(() => setIsReceiverHit(false), 200);
           return 0;
         }
-        return prev + 2.5;
+        return prev + 3;
       });
     }, 45);
 
     return () => clearInterval(interval);
-  }, [telemetry.rfStatus]);
-
-  const isDisconnected = telemetry.rfStatus === "LOST";
+  }, [isConnected]);
 
   return (
     <div className="h-full flex flex-col justify-between p-4 bg-[#F4F3ED] select-none font-mono-tech">
@@ -34,7 +34,7 @@ export const CommunicationLink: React.FC = () => {
             COMMUNICATION LINK
           </h2>
           <div className="text-[9.5px] tracking-widest text-[#555555] font-semibold mt-0.5">
-            NRF24L01+ <span className="mx-1 text-[#8A887D]">|</span> {telemetry.nodesOnline}
+            ESP-NOW <span className="mx-1 text-[#8A887D]">|</span> {isConnected ? "CONNECTED" : "LOST"}
           </div>
         </div>
         <div className="text-right">
@@ -42,7 +42,7 @@ export const CommunicationLink: React.FC = () => {
             LATENCY
           </div>
           <div className="text-[14px] font-bold tracking-wider text-[#111111]">
-            {isDisconnected ? "--" : `${telemetry.latency} ms`}
+            {telemetry.latency !== null ? `${telemetry.latency} ms` : "--"}
           </div>
         </div>
       </div>
@@ -55,7 +55,7 @@ export const CommunicationLink: React.FC = () => {
             {/* Concentric Signal Arcs */}
             <svg
               className={`absolute top-0 w-12 h-10 overflow-visible transition-opacity ${
-                isDisconnected ? "opacity-20" : "opacity-90"
+                !isConnected ? "opacity-20" : "opacity-90"
               }`}
               viewBox="0 0 48 30"
               fill="none"
@@ -88,7 +88,7 @@ export const CommunicationLink: React.FC = () => {
             </svg>
           </div>
           <div className="mt-1 text-center">
-            <div className="font-bold text-[10px] text-[#111111] tracking-wider">SENDER</div>
+            <div className="font-bold text-[10px] text-[#111111] tracking-wider">ESP32 #1</div>
             <div className="text-[8.5px] text-[#666661] tracking-tight">(Core Node)</div>
           </div>
         </div>
@@ -97,7 +97,7 @@ export const CommunicationLink: React.FC = () => {
         <div className="relative flex-1 mx-3 -mt-4">
           <div
             className={`h-[1.5px] w-full transition-colors ${
-              isDisconnected ? "bg-[#FF4848] opacity-50 border-dashed" : "bg-[#456557]"
+              !isConnected ? "bg-[#FF4848] opacity-50 border-dashed" : "bg-[#456557]"
             }`}
           />
 
@@ -106,7 +106,7 @@ export const CommunicationLink: React.FC = () => {
             <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
               <path
                 d="M 1 1 L 7 4 L 1 7"
-                stroke={isDisconnected ? "#FF4848" : "#456557"}
+                stroke={!isConnected ? "#FF4848" : "#456557"}
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
@@ -115,7 +115,7 @@ export const CommunicationLink: React.FC = () => {
           </div>
 
           {/* Static Nodes along Line */}
-          {!isDisconnected && (
+          {isConnected && (
             <>
               <div className="absolute left-[20%] top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[#456557]" />
               <div className="absolute left-[40%] top-1/2 -translate-x-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-[#456557]" />
@@ -130,7 +130,7 @@ export const CommunicationLink: React.FC = () => {
             </>
           )}
 
-          {isDisconnected && (
+          {!isConnected && (
             <div className="absolute inset-0 flex items-center justify-center -top-4 text-[9px] font-bold text-[#FF4848] tracking-widest uppercase">
               LINK LOST
             </div>
@@ -143,7 +143,7 @@ export const CommunicationLink: React.FC = () => {
             {/* Concentric Signal Arcs */}
             <svg
               className={`absolute top-0 w-12 h-10 overflow-visible transition-all ${
-                isDisconnected
+                !isConnected
                   ? "opacity-20"
                   : isReceiverHit
                   ? "opacity-100 scale-110"
@@ -182,18 +182,18 @@ export const CommunicationLink: React.FC = () => {
           </div>
           <div className="mt-1 text-center">
             <div className="font-bold text-[10px] text-[#111111] tracking-wider">RECEIVER</div>
-            <div className="text-[8.5px] text-[#666661] tracking-tight">(Peripheral Node)</div>
+            <div className="text-[8.5px] text-[#666661] tracking-tight">(ESP-NOW Client)</div>
           </div>
         </div>
       </div>
 
       {/* Bottom Telemetry Line */}
       <div className="pt-2 border-t border-[#B5B3A7] flex items-center justify-between text-center text-[9.5px] tracking-wider text-[#333333] font-semibold">
-        <span>PACKETS: {telemetry.packetCount}</span>
+        <span>PACKETS: {telemetry.packetCount !== null ? telemetry.packetCount : "--"}</span>
         <span className="text-[#8A887D]">|</span>
-        <span>LOST: {telemetry.lostPackets}</span>
+        <span>LOST: {telemetry.lostPackets !== null ? telemetry.lostPackets : "--"}</span>
         <span className="text-[#8A887D]">|</span>
-        <span>RSSI: {telemetry.rssi} dBm</span>
+        <span>RSSI: {telemetry.rssi !== null ? `${telemetry.rssi} dBm` : "--"}</span>
       </div>
     </div>
   );

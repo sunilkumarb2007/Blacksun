@@ -21,7 +21,7 @@ export const SystemArchitecturePage: React.FC = () => {
       category: "SENSOR",
       pins: "GPIO 4 (1-Wire Bus with 4.7kΩ Pullup)",
       purpose: "Precision digital temperature monitoring directly on motor stator housing.",
-      liveMetric: `${telemetry.temperature.toFixed(1)} °C (+${telemetry.temperatureRate.toFixed(1)} °C/min)`,
+      liveMetric: telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C (+${telemetry.temperatureRate ?? 0} °C/min)` : "--",
     },
     {
       id: "mpu6050",
@@ -29,7 +29,7 @@ export const SystemArchitecturePage: React.FC = () => {
       category: "SENSOR",
       pins: "I2C SDA: GPIO 21, SCL: GPIO 22",
       purpose: "Harmonic mechanical resonance & vibration peak acceleration detection.",
-      liveMetric: `${telemetry.vibration.toFixed(2)} g (${telemetry.vibrationAlert})`,
+      liveMetric: telemetry.vibration !== null ? `${telemetry.vibration.toFixed(2)} g (${telemetry.vibrationAlert})` : "--",
     },
     {
       id: "ina219",
@@ -37,7 +37,7 @@ export const SystemArchitecturePage: React.FC = () => {
       category: "SENSOR",
       pins: "I2C SDA: GPIO 21, SCL: GPIO 22 (Addr 0x40)",
       purpose: "Total 12V bus voltage and system-wide current draw calculation.",
-      liveMetric: `${telemetry.voltage.toFixed(1)} V / ${telemetry.current.toFixed(1)} A (${telemetry.power.toFixed(1)} W)`,
+      liveMetric: telemetry.voltage !== null ? `${telemetry.voltage.toFixed(1)} V / ${telemetry.current?.toFixed(2)} A (${telemetry.power?.toFixed(1)} W)` : "--",
     },
     {
       id: "acs712",
@@ -45,7 +45,7 @@ export const SystemArchitecturePage: React.FC = () => {
       category: "SENSOR",
       pins: "ADC1_CH4 (GPIO 32, Analog)",
       purpose: "Isolated motor armature current monitoring to detect stall and over-torque.",
-      liveMetric: `${telemetry.motorCurrent.toFixed(2)} A`,
+      liveMetric: telemetry.current !== null ? `${telemetry.current.toFixed(2)} A (INA219)` : "--",
     },
     {
       id: "esp32",

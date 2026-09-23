@@ -8,7 +8,7 @@ export const ActuatorsStatus: React.FC = () => {
     {
       id: "heater",
       label: "Heater",
-      isOn: telemetry.heater,
+      isOn: telemetry.heaterOn,
       key: "heater" as const,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -20,7 +20,7 @@ export const ActuatorsStatus: React.FC = () => {
     {
       id: "fan",
       label: "Fan",
-      isOn: telemetry.fan,
+      isOn: telemetry.fanOn,
       key: "fan" as const,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -49,7 +49,7 @@ export const ActuatorsStatus: React.FC = () => {
     {
       id: "motor",
       label: "Motor",
-      isOn: telemetry.motor,
+      isOn: telemetry.motorOn,
       key: "motor" as const,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -61,7 +61,7 @@ export const ActuatorsStatus: React.FC = () => {
     {
       id: "buzzer",
       label: "Buzzer",
-      isOn: telemetry.buzzer,
+      isOn: telemetry.buzzerOn,
       key: "buzzer" as const,
       icon: (
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -99,7 +99,9 @@ export const ActuatorsStatus: React.FC = () => {
         <h2 className="font-display font-black text-[15px] tracking-wider text-[#111111]">
           ACTUATORS STATUS
         </h2>
-        <div className="h-2" />
+        <div className="text-[9px] tracking-widest text-[#666661] font-semibold mt-0.5 uppercase">
+          HARDWARE FEEDBACK
+        </div>
       </div>
 
       {/* Actuator Toggles List */}
@@ -109,7 +111,7 @@ export const ActuatorsStatus: React.FC = () => {
             key={act.id}
             onClick={() => toggleActuator(act.key)}
             className="flex items-center justify-between cursor-pointer group py-0.5"
-            title={`Click to manually toggle ${act.label}`}
+            title={`Click to command ${act.label} via WebSocket`}
           >
             {/* Left Icon & Label */}
             <div className="flex items-center gap-2.5">

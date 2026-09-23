@@ -20,27 +20,31 @@ export interface LogEvent {
 }
 
 export interface SystemSettings {
-  tempWarningThreshold: number;     // e.g. 40°C
-  tempCriticalThreshold: number;    // e.g. 50°C
-  vibrationWarningThreshold: number;// e.g. 0.06 g
-  vibrationCriticalThreshold: number;// e.g. 0.25 g
-  currentWarningThreshold: number;  // e.g. 2.0 A
-  currentCriticalThreshold: number;  // e.g. 2.6 A
-  rfTimeoutMs: number;              // e.g. 200 ms
-  telemetryRateMs: number;          // e.g. 1000 ms
+  tempWarningThreshold: number;     // 28°C
+  tempCriticalThreshold: number;    // 35°C
+  vibrationWarningThreshold: number;// 3.0 g
+  vibrationCriticalThreshold: number;// 5.0 g
+  currentWarningThreshold: number;  // 2.0 A
+  currentCriticalThreshold: number; // 2.6 A
+  rfTimeoutMs: number;              // 200 ms
+  telemetryRateMs: number;          // 500 ms
 }
 
 export interface TelemetryState {
-  // Live Sensors
-  temperature: number; // e.g. 38.7
-  temperatureRate: number; // e.g. +4.2
-  voltage: number; // e.g. 11.8
-  current: number; // e.g. 2.1
-  power: number; // e.g. 24.8
-  motorCurrent: number; // e.g. 0.86
-  vibration: number; // e.g. 0.08
+  // Connection State
+  isConnected: boolean;
+  wsStatus: "connecting" | "connected" | "disconnected";
+
+  // Live Sensors (real hardware, null or number)
+  temperature: number | null; // e.g. 31.4 °C
+  temperatureRate: number | null; // e.g. +0.4 °C/min
+  voltage: number | null; // e.g. 11.92 V
+  current: number | null; // e.g. 1.84 A (INA219)
+  power: number | null; // e.g. 21.95 W (INA219)
+  motorCurrent: number | null; // same as INA219 current or dedicated
+  vibration: number | null; // e.g. 0.08 g (MPU6050)
   
-  // Historical buffers for sparklines & charts (array of recent values)
+  // Historical buffers for real waveform graphs (latest 60-120 samples)
   tempHistory: number[];
   voltageHistory: number[];
   currentHistory: number[];
@@ -49,26 +53,31 @@ export interface TelemetryState {
   vibrationHistory: number[];
   
   // Motor Health
-  rpm: number; // e.g. 1480
-  motorHealthCurrent: number; // e.g. 1.82
-  vibrationAlert: "NORMAL" | "HIGH" | "CRITICAL"; // HIGH
-  motorLoad: number; // e.g. 82%
+  rpm: number | null; // Always null / N/A as per hardware spec
+  motorSpeed: number | null; // PWM 0-255
+  fanSpeed: number | null; // PWM 0-255
+  motorHealthCurrent: number | null; // INA219 Current
+  vibrationAlert: "NORMAL" | "HIGH" | "CRITICAL"; // Normal if < 3.0, ALERT if >= 3.0
+  motorLoad: number | null; // Load indicator %
   failureRisk: number; // e.g. 84%
   motorState: "NORMAL" | "WARNING" | "DEGRADED" | "CRITICAL" | "PROTECTED";
   thermalStress: number; // 0-100
   mechanicalStress: number; // 0-100
   electricalStress: number; // 0-100
   
-  // Communication Link
+  // Communication Link (ESP-NOW)
+  communicationType: string; // "ESP-NOW"
+  esp1Online: boolean;
   rfStatus: "CONNECTED" | "DEGRADED" | "LOST";
-  nodesOnline: string; // "2 / 2 NODES ONLINE"
-  latency: number; // e.g. 19
-  packetCount: number; // e.g. 1040
-  lostPackets: number; // e.g. 3
-  rssi: number; // e.g. -67
-  ackRate: number; // e.g. 99.7%
+  nodesOnline: string; // "ESP-NOW / ESP32 CORE"
+  latency: number | null; // null if not in telemetry
+  packetCount: number | null; // null if not in telemetry
+  lostPackets: number | null; // null if not in telemetry
+  rssi: number | null; // null if not in telemetry
+  ackRate: number | null;
   lastPacketTime: string;
   lastAckTime: string;
+  uptimeSeconds: number | null;
   
   // Mission Control
   systemStatusText: string;
@@ -91,13 +100,33 @@ export interface TelemetryState {
   subNote: string;
   footerTag: string;
   
-  // Actuators
+  // Actuators (Actual states reported by ESP32)
   heater: boolean;
   fan: boolean;
   relay: boolean;
   motor: boolean;
   buzzer: boolean;
+  motorOn: boolean;
+  fanOn: boolean;
+  heaterOn: boolean;
+  buzzerOn: boolean;
+
+  // LEDs (calculated dynamically per hardware rule)
+  // LED RED: temp >= 29
+  // LED GREEN: temp < 29
+  // LED YELLOW: motorOn && vibration >= 3
+  // LED BLUE: motorOn && vibration < 3
   ledRed: boolean;
+  ledGreen: boolean;
+  ledYellow: boolean;
+  ledBlue: boolean;
+
+  // Diagnostics & Modes
+  ds18b20OK: boolean;
+  ina219OK: boolean;
+  mpu6050OK: boolean;
+  manualMode: boolean;
+  thermalSurvivalMode: boolean;
 
   // Metadata
   lastUpdatedSec: number;

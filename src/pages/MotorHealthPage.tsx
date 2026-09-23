@@ -3,33 +3,34 @@ import { useTelemetry } from "../context/TelemetryContext";
 
 export const MotorHealthPage: React.FC = () => {
   const { telemetry } = useTelemetry();
+  const isConnected = telemetry.isConnected;
 
   const stressIndicators = [
     {
       id: "thermal",
       name: "THERMAL STRESS",
-      val: telemetry.thermalStress,
+      val: isConnected ? telemetry.thermalStress : 0,
       desc: "Stator winding thermal degradation risk",
       limit: "80%",
-      status: telemetry.thermalStress > 80 ? "CRITICAL" : telemetry.thermalStress > 60 ? "WARNING" : "NORMAL",
+      status: !isConnected ? "OFFLINE" : telemetry.thermalStress > 80 ? "CRITICAL" : telemetry.thermalStress > 60 ? "WARNING" : "NORMAL",
       color: telemetry.thermalStress > 80 ? "#FF4848" : "#FFA133",
     },
     {
       id: "mechanical",
       name: "MECHANICAL STRESS",
-      val: telemetry.mechanicalStress,
+      val: isConnected ? telemetry.mechanicalStress : 0,
       desc: "Bearing race & shaft resonance fatigue",
       limit: "75%",
-      status: telemetry.mechanicalStress > 75 ? "CRITICAL" : telemetry.mechanicalStress > 50 ? "WARNING" : "NORMAL",
+      status: !isConnected ? "OFFLINE" : telemetry.mechanicalStress > 75 ? "CRITICAL" : telemetry.mechanicalStress > 50 ? "WARNING" : "NORMAL",
       color: telemetry.mechanicalStress > 75 ? "#FF4848" : "#FFA133",
     },
     {
       id: "electrical",
       name: "ELECTRICAL STRESS",
-      val: telemetry.electricalStress,
+      val: isConnected ? telemetry.electricalStress : 0,
       desc: "BTS7960 junction inductive kick & amp draw",
       limit: "85%",
-      status: telemetry.electricalStress > 85 ? "CRITICAL" : "NORMAL",
+      status: !isConnected ? "OFFLINE" : telemetry.electricalStress > 85 ? "CRITICAL" : "NORMAL",
       color: telemetry.electricalStress > 85 ? "#FF4848" : "#456557",
     },
   ];
@@ -54,14 +55,16 @@ export const MotorHealthPage: React.FC = () => {
           <span className="text-[10px] text-[#5A686D] uppercase">HEALTH STATE:</span>
           <span
             className={`font-bold px-2 py-0.5 text-[11px] border ${
-              telemetry.failureRisk > 80
+              !isConnected
+                ? "border-[#9A9890] bg-[#9A9890] text-white"
+                : telemetry.failureRisk > 80
                 ? "border-[#FF4848] bg-[#FF4848] text-white"
                 : telemetry.failureRisk > 40
                 ? "border-[#FFA133] bg-[#FFA133] text-[#182226]"
                 : "border-[#456557] bg-[#456557] text-white"
             }`}
           >
-            {telemetry.failureRisk > 80 ? "CRITICAL" : telemetry.failureRisk > 50 ? "WARNING" : "NORMAL"}
+            {!isConnected ? "OFFLINE" : telemetry.failureRisk > 80 ? "CRITICAL" : telemetry.failureRisk > 50 ? "WARNING" : "NORMAL"}
           </span>
         </div>
       </div>
@@ -95,8 +98,8 @@ export const MotorHealthPage: React.FC = () => {
               {/* Internal Windings (Highlight based on temp) */}
               <path
                 d="M 60 32 L 180 32 L 180 90 L 60 90 Z"
-                fill={telemetry.temperature > 45 ? "#FF484820" : "none"}
-                stroke={telemetry.temperature > 45 ? "#FF4848" : "#2C393E"}
+                fill={isConnected && (telemetry.temperature ?? 0) > 35 ? "#FF484820" : "none"}
+                stroke={isConnected && (telemetry.temperature ?? 0) > 35 ? "#FF4848" : "#2C393E"}
                 strokeWidth="1.2"
                 strokeDasharray="4 2"
               />
@@ -131,31 +134,39 @@ export const MotorHealthPage: React.FC = () => {
               <span className="font-bold text-[12px] text-[#182226] tracking-wider uppercase">
                 DIAGNOSTIC METRICS
               </span>
-              <span className="text-[10px] text-[#456557] font-bold">DETERMINISTIC EVAL</span>
+              <span className="text-[10px] text-[#456557] font-bold">HARDWARE FEED</span>
             </div>
 
             <div className="space-y-2 text-[12px]">
               <div className="flex justify-between py-1 border-b border-[#B5B3A7]/50">
                 <span className="text-[#5A686D]">MOTOR VELOCITY</span>
-                <span className="text-[#182226] font-bold">{telemetry.rpm} RPM</span>
+                <span className="text-[#182226] font-bold">--</span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#B5B3A7]/50">
-                <span className="text-[#5A686D]">ARMATURE CURRENT</span>
-                <span className="text-[#182226] font-bold">{telemetry.motorHealthCurrent.toFixed(2)} A</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#B5B3A7]/50">
-                <span className="text-[#5A686D]">CORE TEMPERATURE</span>
-                <span className="text-[#182226] font-bold">{telemetry.temperature.toFixed(1)} °C</span>
-              </div>
-              <div className="flex justify-between py-1 border-b border-[#B5B3A7]/50">
-                <span className="text-[#5A686D]">VIBRATION INTENSITY</span>
-                <span className={`font-bold ${telemetry.vibrationAlert === "HIGH" ? "text-[#FF4848]" : "text-[#456557]"}`}>
-                  {telemetry.vibration.toFixed(2)} g ({telemetry.vibrationAlert})
+                <span className="text-[#5A686D]">CURRENT (INA219)</span>
+                <span className="text-[#182226] font-bold">
+                  {isConnected && telemetry.current !== null ? `${telemetry.current.toFixed(2)} A` : "--"}
                 </span>
               </div>
               <div className="flex justify-between py-1 border-b border-[#B5B3A7]/50">
-                <span className="text-[#5A686D]">ELECTRICAL LOAD</span>
-                <span className="text-[#182226] font-bold">{telemetry.motorLoad} %</span>
+                <span className="text-[#5A686D]">CORE TEMPERATURE</span>
+                <span className="text-[#182226] font-bold">
+                  {isConnected && telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C` : "--"}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-[#B5B3A7]/50">
+                <span className="text-[#5A686D]">VIBRATION INTENSITY</span>
+                <span className={`font-bold ${isVibAlert(telemetry.vibration) ? "text-[#FF4848]" : "text-[#456557]"}`}>
+                  {isConnected && telemetry.vibration !== null
+                    ? `${telemetry.vibration.toFixed(2)} g (${telemetry.vibration >= 3.0 ? "ALERT" : "NORMAL"})`
+                    : "--"}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-[#B5B3A7]/50">
+                <span className="text-[#5A686D]">MOTOR PWM</span>
+                <span className="text-[#182226] font-bold">
+                  {isConnected ? (telemetry.motorOn ? `${telemetry.motorSpeed ?? 180} / 255` : "OFF") : "--"}
+                </span>
               </div>
             </div>
           </div>
@@ -165,13 +176,13 @@ export const MotorHealthPage: React.FC = () => {
             <div className="flex items-baseline justify-between mb-1.5">
               <span className="text-[10px] font-bold text-[#182226] uppercase">RISK INDEX</span>
               <span className="text-[16px] font-display font-extrabold text-[#FF4848]">
-                {telemetry.failureRisk} <span className="text-[11px] text-[#5A686D]">/ 100</span>
+                {isConnected ? telemetry.failureRisk : "--"} <span className="text-[11px] text-[#5A686D]">/ 100</span>
               </span>
             </div>
             <div className="h-4 border border-[#B5B3A7] bg-[#FFFFFF] p-[1px]">
               <div
                 className="h-full bg-[#FF4848] transition-all duration-300"
-                style={{ width: `${telemetry.failureRisk}%` }}
+                style={{ width: `${isConnected ? telemetry.failureRisk : 0}%` }}
               />
             </div>
           </div>
@@ -191,6 +202,8 @@ export const MotorHealthPage: React.FC = () => {
                       ? "bg-[#FF4848] text-white"
                       : s.status === "WARNING"
                       ? "bg-[#FFA133] text-[#182226]"
+                      : s.status === "OFFLINE"
+                      ? "bg-[#9A9890] text-white"
                       : "bg-[#456557] text-white"
                   }`}
                 >
@@ -203,7 +216,9 @@ export const MotorHealthPage: React.FC = () => {
             <div>
               <div className="flex justify-between items-baseline text-[10px] mb-1">
                 <span className="text-[#5A686D]">SAFE LIMIT: {s.limit}</span>
-                <span className="text-[#182226] font-bold text-[14px]">{s.val}%</span>
+                <span className="text-[#182226] font-bold text-[14px]">
+                  {isConnected ? `${s.val}%` : "--"}
+                </span>
               </div>
               <div className="h-2.5 border border-[#B5B3A7] bg-[#FFFFFF] p-[1px]">
                 <div
@@ -217,4 +232,8 @@ export const MotorHealthPage: React.FC = () => {
       </div>
     </div>
   );
+
+  function isVibAlert(v: number | null): boolean {
+    return isConnected && v !== null && v >= 3.0;
+  }
 };

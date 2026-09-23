@@ -8,6 +8,9 @@ export const Header: React.FC = () => {
     setShowDataModal,
     setShowInfoModal,
     resetToImageDefault,
+    isConnected,
+    wsStatus,
+    reconnectWS,
   } = useTelemetry();
 
   const [timeStr, setTimeStr] = useState("10:35:29");
@@ -77,12 +80,32 @@ export const Header: React.FC = () => {
           <div className="text-[13px] font-bold text-[#111111]">{timeStr}</div>
         </div>
 
-        {/* System Online Status Pill */}
-        <div className="hidden lg:flex items-center gap-2 pl-3 border-l border-[#B5B3A7] text-[10px]">
-          <span className="w-2 h-2 rounded-full bg-[#2E7D32]" />
+        {/* System Online / Offline Status Pill */}
+        <div
+          onClick={reconnectWS}
+          className="hidden lg:flex items-center gap-2 pl-3 border-l border-[#B5B3A7] text-[10px] cursor-pointer"
+          title={isConnected ? "WebSocket Connected" : "Click to reconnect to ws://192.168.4.1:81"}
+        >
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${
+              isConnected
+                ? "bg-[#2E7D32]"
+                : wsStatus === "connecting"
+                ? "bg-[#FFA133] animate-pulse"
+                : "bg-[#FF4848]"
+            }`}
+          />
           <div>
-            <div className="font-bold text-[#2E4640] tracking-wider">SYSTEM ONLINE</div>
-            <div className="text-[8.5px] text-[#78766B]">ESP32 CORE ACTIVE</div>
+            <div
+              className={`font-bold tracking-wider ${
+                isConnected ? "text-[#2E4640]" : "text-[#FF4848]"
+              }`}
+            >
+              {isConnected ? "SYSTEM ONLINE" : wsStatus === "connecting" ? "CONNECTING..." : "COMMUNICATION LOST"}
+            </div>
+            <div className="text-[8.5px] text-[#78766B]">
+              {isConnected ? "ESP32 CORE ACTIVE" : "OFFLINE (192.168.4.1:81)"}
+            </div>
           </div>
         </div>
 

@@ -3,13 +3,20 @@ import { useTelemetry } from "../../context/TelemetryContext";
 
 export const LiveTelemetry: React.FC = () => {
   const { telemetry } = useTelemetry();
+  const isConnected = telemetry.isConnected;
 
   const renderSparkline = (data: number[], color: string, height = 28) => {
-    if (!data || data.length < 2) return null;
+    const width = 120;
+    if (!data || data.length < 2) {
+      return (
+        <svg className="w-full h-7 overflow-visible opacity-30" viewBox={`0 0 ${width} ${height}`}>
+          <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke={color} strokeWidth="1" strokeDasharray="2 2" />
+        </svg>
+      );
+    }
     const min = Math.min(...data);
     const max = Math.max(...data);
     const range = max - min || 1;
-    const width = 120;
     const points = data
       .map((val, idx) => {
         const x = (idx / (data.length - 1)) * width;
@@ -19,7 +26,7 @@ export const LiveTelemetry: React.FC = () => {
       .join(" ");
 
     return (
-      <svg className="w-full h-7 overflow-visible opacity-70" viewBox={`0 0 ${width} ${height}`}>
+      <svg className="w-full h-7 overflow-visible opacity-80" viewBox={`0 0 ${width} ${height}`}>
         <polyline
           fill="none"
           stroke={color}
@@ -41,11 +48,11 @@ export const LiveTelemetry: React.FC = () => {
             LIVE TELEMETRY
           </h2>
           <div className="text-[9px] tracking-widest text-[#555555] font-semibold mt-0.5 uppercase">
-            SENSORS (REAL-TIME)
+            SENSORS ({isConnected ? "STREAMING" : "WAITING FOR CORE"})
           </div>
         </div>
         <div className="text-[9.5px] tracking-widest text-[#78766B] font-semibold uppercase">
-          UPDATED {telemetry.lastUpdatedSec} SEC AGO
+          {isConnected ? `UPDATED ${telemetry.lastUpdatedSec} SEC AGO` : "OFFLINE"}
         </div>
       </div>
 
@@ -62,10 +69,12 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {telemetry.temperature.toFixed(1)} °C
+              {isConnected && telemetry.temperature !== null ? `${telemetry.temperature.toFixed(1)} °C` : "--"}
             </div>
             <div className="text-[9.5px] font-bold text-[#FF4848] tracking-tight">
-              ↑ +{telemetry.temperatureRate.toFixed(1)} °C/min
+              {isConnected && telemetry.temperatureRate !== null
+                ? `↑ ${telemetry.temperatureRate >= 0 ? "+" : ""}${telemetry.temperatureRate.toFixed(1)} °C/min`
+                : "--"}
             </div>
           </div>
 
@@ -90,9 +99,11 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {telemetry.voltage.toFixed(1)} V
+              {isConnected && telemetry.voltage !== null ? `${telemetry.voltage.toFixed(1)} V` : "--"}
             </div>
-            <div className="h-3.5" />
+            <div className="h-3.5 text-[9px] text-[#666661]">
+              {isConnected ? "DC BUS" : "--"}
+            </div>
           </div>
 
           <div className="w-full my-1 z-10">
@@ -115,9 +126,11 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {telemetry.current.toFixed(1)} A
+              {isConnected && telemetry.current !== null ? `${telemetry.current.toFixed(2)} A` : "--"}
             </div>
-            <div className="h-3.5" />
+            <div className="h-3.5 text-[9px] text-[#666661]">
+              {isConnected ? "TOTAL DRAW" : "--"}
+            </div>
           </div>
 
           <div className="w-full my-1 z-10">
@@ -130,7 +143,7 @@ export const LiveTelemetry: React.FC = () => {
           </div>
         </div>
 
-        {/* 4. POWER (CALCULATED) */}
+        {/* 4. POWER (INA219) */}
         <div className="relative flex flex-col items-center justify-between px-2 text-center group">
           <div className="h-7 flex items-center justify-center text-[#3D6E5C] z-10">
             <svg width="22" height="22" viewBox="0 0 28 28" fill="none" stroke="currentColor" strokeWidth="2">
@@ -143,9 +156,11 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {telemetry.power.toFixed(1)} W
+              {isConnected && telemetry.power !== null ? `${telemetry.power.toFixed(1)} W` : "--"}
             </div>
-            <div className="h-3.5" />
+            <div className="h-3.5 text-[9px] text-[#666661]">
+              {isConnected ? "SYSTEM BUS" : "--"}
+            </div>
           </div>
 
           <div className="w-full my-1 z-10">
@@ -154,25 +169,26 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="text-[9px] leading-[1.25] tracking-tight text-[#333333] uppercase font-bold z-10">
             <div>POWER</div>
-            <div className="text-[#666661]">(CALCULATED)</div>
+            <div className="text-[#666661]">(INA219)</div>
           </div>
         </div>
 
-        {/* 5. MOTOR CURRENT (ACS712) */}
+        {/* 5. MOTOR (PWM) */}
         <div className="relative flex flex-col items-center justify-between px-2 text-center group">
           <div className="h-7 flex items-center justify-center text-[#19D3C2] z-10">
             <svg width="22" height="22" viewBox="0 0 28 28" fill="none" stroke="#111111" strokeWidth="2">
-              <path d="M6 20 C6 10, 22 10, 22 20" strokeLinecap="round" />
-              <circle cx="6" cy="20" r="1.5" fill="#111111" />
-              <circle cx="22" cy="20" r="1.5" fill="#111111" />
+              <circle cx="14" cy="14" r="10" />
+              <path d="M10 14h8m-4-4v8" strokeLinecap="round" />
             </svg>
           </div>
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {telemetry.motorCurrent.toFixed(2)} A
+              {isConnected && telemetry.motorSpeed !== null ? `${telemetry.motorSpeed}` : "--"}
             </div>
-            <div className="h-3.5" />
+            <div className="h-3.5 text-[9px] font-bold text-[#364E46]">
+              {isConnected ? (telemetry.motorOn ? "MOTOR RUNNING" : "MOTOR OFF") : "--"}
+            </div>
           </div>
 
           <div className="w-full my-1 z-10">
@@ -180,8 +196,8 @@ export const LiveTelemetry: React.FC = () => {
           </div>
 
           <div className="text-[9px] leading-[1.25] tracking-tight text-[#333333] uppercase font-bold z-10">
-            <div>MOTOR CURRENT</div>
-            <div className="text-[#666661]">(ACS712)</div>
+            <div>MOTOR SPEED</div>
+            <div className="text-[#666661]">(PWM 0-255)</div>
           </div>
         </div>
 
@@ -195,9 +211,21 @@ export const LiveTelemetry: React.FC = () => {
 
           <div className="my-1 z-10">
             <div className="font-display font-black text-[22px] leading-tight text-[#111111] tracking-tight">
-              {telemetry.vibration.toFixed(2)} g
+              {isConnected && telemetry.vibration !== null ? `${telemetry.vibration.toFixed(2)} g` : "--"}
             </div>
-            <div className="h-3.5" />
+            <div
+              className={`h-3.5 text-[9px] font-bold ${
+                isConnected && telemetry.vibration !== null && telemetry.vibration >= 3.0
+                  ? "text-[#FF4848]"
+                  : "text-[#3D6E5C]"
+              }`}
+            >
+              {isConnected && telemetry.vibration !== null
+                ? telemetry.vibration >= 3.0
+                  ? "VIBRATION ALERT"
+                  : "NORMAL"
+                : "--"}
+            </div>
           </div>
 
           <div className="w-full my-1 z-10">
